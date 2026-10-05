@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  Menu,
+  X,
   LayoutDashboard,
   Users,
   BookOpen,
@@ -9,59 +11,38 @@ import {
   ClipboardCheck,
   BarChart3,
   LogOut,
-  Menu,
-  X,
-  Plus,
-  ArrowRight,
-  CalendarDays,
+  Bell,
+  Search,
+  ChevronRight,
   Clock,
-  Phone,
-  UserPlus,
-  BookPlus,
+  AlertTriangle,
   CheckCircle2,
-  AlertCircle,
+  UserPlus,
+  CalendarPlus,
+  ClipboardList,
 } from "lucide-react";
 
-const courses = [
+
+// --------------------------------------------------
+// MOCK DATA
+// --------------------------------------------------
+
+const todayCourses = [
   {
-    name: "Engelsk",
-    teacher: "Sarah Johnson",
-    day: "Mandag",
-    time: "17:00 – 20:00",
-    students: 18,
-    status: "Pågående",
+    time: "09:00",
+    subject: "Engelsk",
+    teacher: "Kari Hansen",
+    participants: 8,
+    status: "upcoming",
+    info: "Om 45 minutter",
   },
   {
-    name: "Matematikk",
-    teacher: "David Smith",
-    day: "Tirsdag",
-    time: "17:00 – 20:00",
-    students: 21,
-    status: "Pågående",
-  },
-  {
-    name: "Historie",
-    teacher: "Emma Williams",
-    day: "Onsdag",
-    time: "17:00 – 20:00",
-    students: 16,
-    status: "Planlagt",
-  },
-  {
-    name: "Kjemi",
-    teacher: "Michael Brown",
-    day: "Torsdag",
-    time: "17:00 – 20:00",
-    students: 14,
-    status: "Pågående",
-  },
-  {
-    name: "Fysikk",
-    teacher: "James Wilson",
-    day: "Fredag",
-    time: "17:00 – 20:00",
-    students: 12,
-    status: "Planlagt",
+    time: "13:00",
+    subject: "Matematikk",
+    teacher: "Per Johansen",
+    participants: 12,
+    status: "upcoming",
+    info: "Om 4 timer",
   },
 ];
 
@@ -69,733 +50,850 @@ const recentParticipants = [
   {
     name: "Anna Hansen",
     course: "Engelsk",
-    phone: "912 34 567",
-    date: "I dag",
+    time: "10:42",
   },
   {
-    name: "Ola Nordmann",
+    name: "Erik Olsen",
     course: "Matematikk",
-    phone: "923 45 678",
-    date: "I går",
+    time: "09:17",
   },
   {
-    name: "Kari Olsen",
+    name: "Sara Berg",
+    course: "Kjemi",
+    time: "I går",
+  },
+  {
+    name: "Jonas Nilsen",
     course: "Historie",
-    phone: "934 56 789",
-    date: "I går",
-  },
-  {
-    name: "Per Hansen",
-    course: "Fysikk",
-    phone: "945 67 890",
-    date: "02.10.2026",
+    time: "I går",
   },
 ];
 
-export default function DashboardPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* ============================================================
-          MOBILE HEADER
-      ============================================================ */}
-
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-            K
-          </div>
-
-          <span className="font-bold text-slate-900">
-            Kursbedriften
-          </span>
-        </div>
-
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-          aria-label="Åpne meny"
-        >
-          {sidebarOpen ? (
-            <X className="h-6 w-6" />
-          ) : (
-            <Menu className="h-6 w-6" />
-          )}
-        </button>
-      </header>
-
-      {/* ============================================================
-          MOBILE OVERLAY
-      ============================================================ */}
-
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* ============================================================
-          SIDEBAR
-      ============================================================ */}
-
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-200 bg-white transition-transform duration-200 ${
-          sidebarOpen
-            ? "translate-x-0"
-            : "-translate-x-full lg:translate-x-0"
-        }`}
-      >
-        <div className="flex h-full flex-col">
-          {/* Logo */}
-
-          <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
-              K
-            </div>
-
-            <div>
-              <p className="font-bold text-slate-900">
-                Kursbedriften
-              </p>
-
-              <p className="text-xs text-slate-500">
-                Administrasjon
-              </p>
-            </div>
-          </div>
-
-          {/* Navigation */}
-
-          <nav className="flex-1 space-y-1 p-4">
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Hovedmeny
-            </p>
-
-            <SidebarLink
-              icon={<LayoutDashboard className="h-5 w-5" />}
-              label="Dashboard"
-              active
-            />
-
-            <SidebarLink
-              icon={<Users className="h-5 w-5" />}
-              label="Deltakere"
-            />
-
-            <SidebarLink
-              icon={<BookOpen className="h-5 w-5" />}
-              label="Kurs"
-            />
-
-            <SidebarLink
-              icon={<GraduationCap className="h-5 w-5" />}
-              label="Lærere"
-            />
-
-            <SidebarLink
-              icon={<ClipboardCheck className="h-5 w-5" />}
-              label="Oppmøte"
-            />
-
-            <SidebarLink
-              icon={<BarChart3 className="h-5 w-5" />}
-              label="Rapporter"
-            />
-          </nav>
-
-          {/* User section */}
-
-          <div className="border-t border-slate-200 p-4">
-            <div className="flex items-center gap-3 rounded-lg p-2">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                BJ
-              </div>
-
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">
-                  Benjamin
-                </p>
-
-                <p className="truncate text-xs text-slate-500">
-                  Kontoransatt
-                </p>
-              </div>
-            </div>
-
-            <button className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
-              <LogOut className="h-4 w-4" />
-              Logg ut
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* ============================================================
-          MAIN CONTENT
-      ============================================================ */}
-
-      <main className="lg:ml-64">
-        <div className="mx-auto max-w-7xl p-5 sm:p-6 lg:p-8">
-
-          {/* ========================================================
-              PAGE HEADER
-          ======================================================== */}
-
-          <div className="mb-8">
-            <p className="text-sm font-medium text-blue-600">
-              Dashboard
-            </p>
-
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              God morgen, Benjamin
-            </h1>
-
-            <p className="mt-2 text-sm text-slate-500 sm:text-base">
-              Her er en oversikt over kursdriften og deltakerne.
-            </p>
-          </div>
-
-          {/* ========================================================
-              STATISTICS
-          ======================================================== */}
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-            <StatCard
-              title="Totalt antall deltakere"
-              value="84"
-              description="+6 denne måneden"
-              icon={<Users className="h-5 w-5" />}
-            />
-
-            <StatCard
-              title="Planlagte kurs"
-              value="5"
-              description="Alle aktive kurs"
-              icon={<BookOpen className="h-5 w-5" />}
-            />
-
-            <StatCard
-              title="Pågående kurs"
-              value="3"
-              description="Kurs som er i gang"
-              icon={<Clock className="h-5 w-5" />}
-            />
-
-            <StatCard
-              title="Lærere"
-              value="5"
-              description="Registrerte lærere"
-              icon={<GraduationCap className="h-5 w-5" />}
-            />
-
-          </div>
-
-          {/* ========================================================
-              MAIN GRID
-          ======================================================== */}
-
-          <div className="mt-6 grid gap-6 xl:grid-cols-3">
-
-            {/* ======================================================
-                COURSES
-            ====================================================== */}
-
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm xl:col-span-2">
-
-              <div className="flex items-center justify-between border-b border-slate-200 p-5">
-
-                <div>
-                  <h2 className="font-semibold text-slate-900">
-                    Aktive kurs
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Oversikt over kurs og ansvarlige lærere
-                  </p>
-                </div>
-
-                <button className="hidden items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 sm:flex">
-                  Se alle
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-
-              </div>
-
-              <div className="divide-y divide-slate-100">
-
-                {courses.map((course) => (
-                  <div
-                    key={course.name}
-                    className="flex flex-col gap-4 p-5 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                  >
-
-                    <div className="flex items-center gap-4">
-
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-50 font-semibold text-blue-600">
-                        {course.name.charAt(0)}
-                      </div>
-
-                      <div>
-                        <p className="font-medium text-slate-900">
-                          {course.name}
-                        </p>
-
-                        <p className="mt-1 text-sm text-slate-500">
-                          {course.teacher}
-                        </p>
-                      </div>
-
-                    </div>
-
-                    <div className="flex items-center gap-5 sm:text-right">
-
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">
-                          {course.day}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          {course.time}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">
-                          {course.students}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          deltakere
-                        </p>
-                      </div>
-
-                      <CourseStatus status={course.status} />
-
-                    </div>
-
-                  </div>
-                ))}
-
-              </div>
-            </section>
-
-            {/* ======================================================
-                QUICK ACTIONS
-            ====================================================== */}
-
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-
-              <div className="border-b border-slate-200 p-5">
-                <h2 className="font-semibold text-slate-900">
-                  Hurtighandlinger
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Vanlige oppgaver
-                </p>
-              </div>
-
-              <div className="space-y-3 p-5">
-
-                <button className="flex w-full items-center gap-3 rounded-lg bg-blue-600 px-4 py-3 text-left text-sm font-medium text-white transition hover:bg-blue-700">
-                  <UserPlus className="h-5 w-5" />
-                  <span>Registrer deltaker</span>
-                </button>
-
-                <button className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                  <BookPlus className="h-5 w-5" />
-                  <span>Opprett kurs</span>
-                </button>
-
-                <button className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                  <ClipboardCheck className="h-5 w-5" />
-                  <span>Se oppmøte</span>
-                </button>
-
-              </div>
-
-            </section>
-
-          </div>
-
-          {/* ========================================================
-              LOWER GRID
-          ======================================================== */}
-
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
-
-            {/* ======================================================
-                RECENT PARTICIPANTS
-            ====================================================== */}
-
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-
-              <div className="flex items-center justify-between border-b border-slate-200 p-5">
-
-                <div>
-                  <h2 className="font-semibold text-slate-900">
-                    Nylig registrerte
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    De siste deltakerne som er registrert
-                  </p>
-                </div>
-
-                <Users className="h-5 w-5 text-slate-400" />
-
-              </div>
-
-              <div className="divide-y divide-slate-100">
-
-                {recentParticipants.map((participant) => (
-                  <div
-                    key={participant.name}
-                    className="flex items-center justify-between gap-4 p-4 transition hover:bg-slate-50"
-                  >
-
-                    <div className="flex min-w-0 items-center gap-3">
-
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-600">
-                        {participant.name
-                          .split(" ")
-                          .map((name) => name[0])
-                          .join("")}
-                      </div>
-
-                      <div className="min-w-0">
-
-                        <p className="truncate text-sm font-medium text-slate-900">
-                          {participant.name}
-                        </p>
-
-                        <p className="truncate text-xs text-slate-500">
-                          {participant.course}
-                        </p>
-
-                      </div>
-
-                    </div>
-
-                    <div className="hidden text-right sm:block">
-
-                      <div className="flex items-center gap-1 text-xs text-slate-500">
-                        <Phone className="h-3 w-3" />
-                        {participant.phone}
-                      </div>
-
-                      <p className="mt-1 text-xs text-slate-400">
-                        {participant.date}
-                      </p>
-
-                    </div>
-
-                  </div>
-                ))}
-
-              </div>
-
-            </section>
-
-            {/* ======================================================
-                REPORTS
-            ====================================================== */}
-
-            <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-
-              <div className="border-b border-slate-200 p-5">
-
-                <h2 className="font-semibold text-slate-900">
-                  Rapporter
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Informasjon om deltakere og kurs
-                </p>
-
-              </div>
-
-              <div className="grid gap-3 p-5 sm:grid-cols-2">
-
-                <ReportCard
-                  icon={<Users className="h-5 w-5" />}
-                  title="Påmeldte deltakere"
-                  value="84"
-                  description="Totalt påmeldt"
-                />
-
-                <ReportCard
-                  icon={<CheckCircle2 className="h-5 w-5" />}
-                  title="Gjennomførte kurs"
-                  value="27"
-                  description="Totalt gjennomført"
-                />
-
-                <ReportCard
-                  icon={<Clock className="h-5 w-5" />}
-                  title="Pågående kurs"
-                  value="3"
-                  description="Kurs som er i gang"
-                />
-
-                <ReportCard
-                  icon={<AlertCircle className="h-5 w-5" />}
-                  title="Fravær"
-                  value="12"
-                  description="Registrerte fravær"
-                />
-
-              </div>
-
-            </section>
-
-          </div>
-
-          {/* ========================================================
-              THIS WEEK
-          ======================================================== */}
-
-          <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-
-            <div className="flex items-center gap-3 border-b border-slate-200 p-5">
-
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <CalendarDays className="h-5 w-5" />
-              </div>
-
-              <div>
-                <h2 className="font-semibold text-slate-900">
-                  Kurs denne uken
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Planlagte kursdager
-                </p>
-              </div>
-
-            </div>
-
-            <div className="overflow-x-auto">
-
-              <table className="w-full min-w-[700px] text-left">
-
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-
-                  <tr>
-                    <th className="px-5 py-3 font-medium">
-                      Kurs
-                    </th>
-
-                    <th className="px-5 py-3 font-medium">
-                      Lærer
-                    </th>
-
-                    <th className="px-5 py-3 font-medium">
-                      Dag
-                    </th>
-
-                    <th className="px-5 py-3 font-medium">
-                      Deltakere
-                    </th>
-
-                    <th className="px-5 py-3 font-medium">
-                      Status
-                    </th>
-                  </tr>
-
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-
-                  {courses.map((course) => (
-                    <tr
-                      key={course.name}
-                      className="transition hover:bg-slate-50"
-                    >
-
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900">
-                        {course.name}
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600">
-                        {course.teacher}
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4 text-slate-400" />
-                          {course.day}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600">
-                        {course.students}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <CourseStatus status={course.status} />
-                      </td>
-
-                    </tr>
-                  ))}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          </section>
-
-        </div>
-      </main>
-    </div>
-  );
-}
-
-/* ================================================================
-   SIDEBAR LINK
-================================================================ */
+// --------------------------------------------------
+// SIDEBAR LINK
+// --------------------------------------------------
 
 function SidebarLink({
   icon,
   label,
   active = false,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <a
-      href="#"
-      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+    <button
+      onClick={onClick}
+      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
         active
-          ? "bg-blue-50 text-blue-700"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
       }`}
     >
-      {icon}
+      <span
+        className={`transition ${
+          active
+            ? "text-blue-600 dark:text-blue-400"
+            : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300"
+        }`}
+      >
+        {icon}
+      </span>
+
       {label}
-    </a>
+    </button>
   );
 }
 
-/* ================================================================
-   STAT CARD
-================================================================ */
 
-function StatCard({
-  title,
-  value,
-  description,
-  icon,
+// --------------------------------------------------
+// STAT ITEM
+// --------------------------------------------------
+
+function SmallStat({
+  number,
+  label,
 }: {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
+  number: string;
+  label: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
-      <div className="flex items-start justify-between">
-
-        <div>
-          <p className="text-sm text-slate-500">
-            {title}
-          </p>
-
-          <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-            {value}
-          </p>
-        </div>
-
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-          {icon}
-        </div>
-
+    <div className="flex items-center gap-3">
+      <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        {number}
       </div>
 
-      <p className="mt-3 text-xs text-slate-500">
-        {description}
-      </p>
-
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+        {label}
+      </div>
     </div>
   );
 }
 
-/* ================================================================
-   COURSE STATUS
-================================================================ */
 
-function CourseStatus({
-  status,
-}: {
-  status: string;
-}) {
-  const isActive = status === "Pågående";
+// --------------------------------------------------
+// MAIN PAGE
+// --------------------------------------------------
+
+export default function DashboardPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <span
-      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
-        isActive
-          ? "bg-green-50 text-green-700"
-          : "bg-slate-100 text-slate-600"
-      }`}
-    >
-      {status}
-    </span>
-  );
-}
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
 
-/* ================================================================
-   REPORT CARD
-================================================================ */
 
-function ReportCard({
-  icon,
-  title,
-  value,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <button className="group rounded-xl border border-slate-200 p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/50">
+      {/* ==================================================
+          MOBILE HEADER
+      ================================================== */}
 
-      <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:hidden">
 
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition group-hover:bg-blue-100 group-hover:text-blue-600">
-          {icon}
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white">
+            K
+          </div>
+
+          <div>
+            <div className="text-sm font-bold">
+              Kursbedriften
+            </div>
+
+            <div className="text-[11px] text-slate-400">
+              Administrasjon
+            </div>
+          </div>
         </div>
 
-        <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-1 group-hover:text-blue-500" />
 
-      </div>
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        >
+          {mobileMenuOpen ? (
+            <X size={22} />
+          ) : (
+            <Menu size={22} />
+          )}
+        </button>
 
-      <p className="mt-4 text-sm font-medium text-slate-900">
-        {title}
-      </p>
+      </header>
 
-      <div className="mt-1 flex items-baseline gap-2">
 
-        <p className="text-2xl font-bold text-slate-900">
-          {value}
-        </p>
+      {/* ==================================================
+          MOBILE MENU
+      ================================================== */}
 
-        <p className="text-xs text-slate-500">
-          {description}
-        </p>
+      {mobileMenuOpen && (
+        <div className="fixed inset-x-0 top-16 z-30 border-b border-slate-200 bg-white p-4 shadow-lg dark:border-slate-800 dark:bg-slate-950 lg:hidden">
 
-      </div>
+          <nav className="space-y-1">
 
-    </button>
+            <SidebarLink
+              icon={<LayoutDashboard size={18} />}
+              label="Oversikt"
+              active
+            />
+
+            <SidebarLink
+              icon={<Users size={18} />}
+              label="Deltakere"
+            />
+
+            <SidebarLink
+              icon={<BookOpen size={18} />}
+              label="Kurs"
+            />
+
+            <SidebarLink
+              icon={<GraduationCap size={18} />}
+              label="Lærere"
+            />
+
+            <SidebarLink
+              icon={<ClipboardCheck size={18} />}
+              label="Oppmøte"
+            />
+
+            <SidebarLink
+              icon={<BarChart3 size={18} />}
+              label="Rapporter"
+            />
+
+          </nav>
+
+          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+
+            <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+              <LogOut size={18} />
+              Logg ut
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
+
+      {/* ==================================================
+          DESKTOP SIDEBAR
+      ================================================== */}
+
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 lg:flex">
+
+        {/* Logo */}
+
+        <div className="flex h-20 items-center gap-3 border-b border-slate-100 px-6 dark:border-slate-800">
+
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-sm">
+            K
+          </div>
+
+          <div>
+            <div className="font-bold tracking-tight">
+              Kursbedriften
+            </div>
+
+            <div className="text-xs text-slate-400">
+              Administrasjon
+            </div>
+          </div>
+
+        </div>
+
+
+        {/* Navigation */}
+
+        <nav className="flex-1 space-y-1 px-3 py-5">
+
+          <SidebarLink
+            icon={<LayoutDashboard size={18} />}
+            label="Oversikt"
+            active
+          />
+
+          <SidebarLink
+            icon={<Users size={18} />}
+            label="Deltakere"
+          />
+
+          <SidebarLink
+            icon={<BookOpen size={18} />}
+            label="Kurs"
+          />
+
+          <SidebarLink
+            icon={<GraduationCap size={18} />}
+            label="Lærere"
+          />
+
+          <SidebarLink
+            icon={<ClipboardCheck size={18} />}
+            label="Oppmøte"
+          />
+
+          <SidebarLink
+            icon={<BarChart3 size={18} />}
+            label="Rapporter"
+          />
+
+        </nav>
+
+
+        {/* Account */}
+
+        <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+
+          <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-900">
+
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+              B
+            </div>
+
+            <div className="min-w-0">
+
+              <div className="truncate text-sm font-semibold">
+                Benjamin
+              </div>
+
+              <div className="text-xs text-slate-400">
+                Administrator
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+
+            <LogOut size={18} />
+
+            Logg ut
+
+          </button>
+
+        </div>
+
+      </aside>
+
+
+      {/* ==================================================
+          MAIN CONTENT
+      ================================================== */}
+
+      <main className="lg:ml-64">
+
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+
+
+          {/* ==================================================
+              TOP BAR
+          ================================================== */}
+
+          <div className="mb-8 flex items-center justify-between">
+
+            <div>
+
+              <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                Tirsdag 5. oktober
+              </div>
+
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                God morgen, Benjamin 👋
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Her er det som skjer hos Kursbedriften i dag.
+              </p>
+
+            </div>
+
+
+            <div className="hidden items-center gap-2 sm:flex">
+
+              <button className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800">
+                <Search size={18} />
+              </button>
+
+              <button className="relative rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800">
+
+                <Bell size={18} />
+
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white dark:ring-slate-900" />
+
+              </button>
+
+            </div>
+
+          </div>
+
+
+          {/* ==================================================
+              TODAY'S COURSES
+          ================================================== */}
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+
+            <div className="border-b border-slate-100 px-5 py-5 dark:border-slate-800 sm:px-6">
+
+              <div className="flex items-center justify-between">
+
+                <div>
+
+                  <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <Clock size={14} />
+                    Dagens program
+                  </div>
+
+                  <h2 className="text-lg font-bold">
+                    Kurs i dag
+                  </h2>
+
+                </div>
+
+
+                <button className="hidden items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700 sm:flex">
+
+                  Se kalender
+
+                  <ChevronRight size={16} />
+
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+
+              {todayCourses.map((course) => (
+
+                <div
+                  key={course.time}
+                  className="group flex items-center gap-4 px-5 py-5 transition hover:bg-slate-50 dark:hover:bg-slate-800/50 sm:px-6"
+                >
+
+                  {/* Time */}
+
+                  <div className="w-14 shrink-0 text-center">
+
+                    <div className="text-lg font-bold text-slate-900 dark:text-white">
+                      {course.time}
+                    </div>
+
+                  </div>
+
+
+                  {/* Timeline */}
+
+                  <div className="relative flex h-14 w-1 shrink-0 justify-center">
+
+                    <div className="h-full w-px bg-slate-200 dark:bg-slate-700" />
+
+                    <div className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-blue-500 bg-white dark:bg-slate-900" />
+
+                  </div>
+
+
+                  {/* Course info */}
+
+                  <div className="min-w-0 flex-1">
+
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+
+                      <h3 className="font-bold capitalize">
+                        {course.subject}
+                      </h3>
+
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+                        {course.info}
+                      </span>
+
+                    </div>
+
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {course.teacher} · {course.participants} deltakere
+                    </p>
+
+                  </div>
+
+
+                  {/* Arrow */}
+
+                  <ChevronRight
+                    size={18}
+                    className="text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-500"
+                  />
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </section>
+
+
+          {/* ==================================================
+              QUICK ACTIONS
+          ================================================== */}
+
+          <section className="mt-6">
+
+            <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Snarveier
+            </div>
+
+
+            <div className="grid gap-3 sm:grid-cols-3">
+
+              <button className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900">
+
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
+                  <UserPlus size={19} />
+                </div>
+
+                <div className="flex-1">
+
+                  <div className="text-sm font-bold">
+                    Registrer deltaker
+                  </div>
+
+                  <div className="text-xs text-slate-400">
+                    Legg til en ny deltaker
+                  </div>
+
+                </div>
+
+                <ChevronRight
+                  size={17}
+                  className="text-slate-300 group-hover:text-blue-500"
+                />
+
+              </button>
+
+
+              <button className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900">
+
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  <CalendarPlus size={19} />
+                </div>
+
+                <div className="flex-1">
+
+                  <div className="text-sm font-bold">
+                    Opprett kurs
+                  </div>
+
+                  <div className="text-xs text-slate-400">
+                    Planlegg et nytt kurs
+                  </div>
+
+                </div>
+
+                <ChevronRight
+                  size={17}
+                  className="text-slate-300 group-hover:text-emerald-500"
+                />
+
+              </button>
+
+
+              <button className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900">
+
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-300">
+                  <ClipboardList size={19} />
+                </div>
+
+                <div className="flex-1">
+
+                  <div className="text-sm font-bold">
+                    Se oppmøte
+                  </div>
+
+                  <div className="text-xs text-slate-400">
+                    Sjekk dagens fravær
+                  </div>
+
+                </div>
+
+                <ChevronRight
+                  size={17}
+                  className="text-slate-300 group-hover:text-violet-500"
+                />
+
+              </button>
+
+            </div>
+
+          </section>
+
+
+          {/* ==================================================
+              LOWER CONTENT
+          ================================================== */}
+
+          <div className="mt-8 grid gap-6 lg:grid-cols-5">
+
+
+            {/* ==================================================
+                COURSE STATUS
+            ================================================== */}
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-2">
+
+              <div className="mb-6">
+
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Kursstatus
+                </div>
+
+                <h2 className="text-lg font-bold">
+                  Slik ser det ut nå
+                </h2>
+
+              </div>
+
+
+              <div className="space-y-5">
+
+                <SmallStat
+                  number="5"
+                  label="aktive kurs"
+                />
+
+                <SmallStat
+                  number="2"
+                  label="planlagte kurs"
+                />
+
+                <SmallStat
+                  number="3"
+                  label="fullførte kurs"
+                />
+
+              </div>
+
+
+              <div className="mt-6 border-t border-slate-100 pt-5 dark:border-slate-800">
+
+                <div className="flex items-center justify-between text-sm">
+
+                  <span className="text-slate-500">
+                    Totalt denne perioden
+                  </span>
+
+                  <span className="font-bold">
+                    10 kurs
+                  </span>
+
+                </div>
+
+              </div>
+
+            </section>
+
+
+            {/* ==================================================
+                RECENT PARTICIPANTS
+            ================================================== */}
+
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 lg:col-span-3">
+
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-5 dark:border-slate-800">
+
+                <div>
+
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Siste registreringer
+                  </div>
+
+                  <h2 className="text-lg font-bold">
+                    Nye deltakere
+                  </h2>
+
+                </div>
+
+                <button className="text-sm font-semibold text-blue-600 hover:text-blue-700">
+                  Se alle
+                </button>
+
+              </div>
+
+
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+
+                {recentParticipants.map((participant) => (
+
+                  <div
+                    key={participant.name}
+                    className="flex items-center gap-3 px-5 py-4"
+                  >
+
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      {participant.name.charAt(0)}
+                    </div>
+
+
+                    <div className="min-w-0 flex-1">
+
+                      <div className="truncate text-sm font-semibold">
+                        {participant.name}
+                      </div>
+
+                      <div className="text-xs text-slate-400">
+                        {participant.course}
+                      </div>
+
+                    </div>
+
+
+                    <div className="text-xs text-slate-400">
+                      {participant.time}
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            </section>
+
+          </div>
+
+
+          {/* ==================================================
+              NEEDS ATTENTION
+          ================================================== */}
+
+          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-5 dark:border-amber-900/50 dark:bg-amber-950/20 sm:p-6">
+
+            <div className="mb-5 flex items-start gap-3">
+
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300">
+                <AlertTriangle size={19} />
+              </div>
+
+              <div>
+
+                <h2 className="font-bold text-slate-900 dark:text-white">
+                  Trenger oppmerksomhet
+                </h2>
+
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                  Noen ting kan være greit å ta tak i.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div className="grid gap-3 md:grid-cols-3">
+
+
+              {/* Missing course */}
+
+              <div className="rounded-xl border border-amber-200/70 bg-white p-4 dark:border-amber-900/40 dark:bg-slate-900">
+
+                <div className="mb-2 flex items-center justify-between">
+
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    2 deltakere
+                  </span>
+
+                  <Users
+                    size={16}
+                    className="text-slate-300"
+                  />
+
+                </div>
+
+                <div className="mb-3 text-sm font-semibold">
+                  Mangler kursplassering
+                </div>
+
+                <button className="text-xs font-bold text-blue-600 hover:text-blue-700">
+                  Finn kurs →
+                </button>
+
+              </div>
+
+
+              {/* Missing teacher */}
+
+              <div className="rounded-xl border border-amber-200/70 bg-white p-4 dark:border-amber-900/40 dark:bg-slate-900">
+
+                <div className="mb-2 flex items-center justify-between">
+
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    1 kurs
+                  </span>
+
+                  <GraduationCap
+                    size={16}
+                    className="text-slate-300"
+                  />
+
+                </div>
+
+                <div className="mb-3 text-sm font-semibold">
+                  Mangler lærer
+                </div>
+
+                <button className="text-xs font-bold text-blue-600 hover:text-blue-700">
+                  Tildel lærer →
+                </button>
+
+              </div>
+
+
+              {/* Absence */}
+
+              <div className="rounded-xl border border-amber-200/70 bg-white p-4 dark:border-amber-900/40 dark:bg-slate-900">
+
+                <div className="mb-2 flex items-center justify-between">
+
+                  <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
+                    3 deltakere
+                  </span>
+
+                  <ClipboardCheck
+                    size={16}
+                    className="text-slate-300"
+                  />
+
+                </div>
+
+                <div className="mb-3 text-sm font-semibold">
+                  Har høyt fravær
+                </div>
+
+                <button className="text-xs font-bold text-blue-600 hover:text-blue-700">
+                  Se fravær →
+                </button>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          {/* ==================================================
+              SUMMARY STRIP
+          ================================================== */}
+
+          <section className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:px-6">
+
+            <SmallStat
+              number="47"
+              label="deltakere"
+            />
+
+            <div className="hidden h-8 w-px bg-slate-200 dark:bg-slate-800 sm:block" />
+
+            <SmallStat
+              number="7"
+              label="aktive kurs"
+            />
+
+            <div className="hidden h-8 w-px bg-slate-200 dark:bg-slate-800 sm:block" />
+
+            <SmallStat
+              number="5"
+              label="lærere"
+            />
+
+            <div className="hidden h-8 w-px bg-slate-200 dark:bg-slate-800 sm:block" />
+
+            <SmallStat
+              number="2"
+              label="planlagte"
+            />
+
+            <div className="ml-auto hidden items-center gap-2 text-xs font-medium text-slate-400 lg:flex">
+
+              <CheckCircle2 size={15} />
+
+              Systemet fungerer som normalt
+
+            </div>
+
+          </section>
+
+
+        </div>
+
+      </main>
+
+    </div>
   );
 }
