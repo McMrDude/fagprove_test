@@ -6,22 +6,44 @@ import { supabase } from "../api/supabaseClient";
 
 export default function LoginPage() {
     const router = useRouter();
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setLoading(true);
+        setError("");
 
-        const { error } = await supabase.auth.signInWithPassword({
+        try{
+    const response = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {
+            "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
             email,
             password,
+            }),
         });
 
-        if (error) {
-            console.error("Error signing in:", error);
-        } else {
-            router.push("/");
+        const result = await response.json();
+
+        if (!result.success) {
+            setError(result.error);
+            return;
+        }
+
+        // Account successfully created.
+        // Send user to login page.
+        router.push("/login");
+
+        } catch {
+        setError("Kunne ikke kontakte serveren.");
+        } finally {
+        setLoading(false);
         }
     };
 
