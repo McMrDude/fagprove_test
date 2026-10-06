@@ -142,6 +142,28 @@ function SmallStat({
 export default function DashboardPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const [registerParticipantOpen, setRegisterParticipantOpen] = useState(false);
+
+  const [participantName, setParticipantName] = useState("");
+  const [participantPhone, setParticipantPhone] = useState("");
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+
+  const availableCourses = [
+    "Engelsk",
+    "Matematikk",
+    "Historie",
+    "Kjemi",
+    "Fysikk",
+  ];
+
+  function toggleCourse(course: string) {
+    setSelectedCourses((current) =>
+      current.includes(course)
+        ? current.filter((item) => item !== course)
+        : [...current, course]
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
 
@@ -513,7 +535,10 @@ export default function DashboardPage() {
 
             <div className="grid gap-3 sm:grid-cols-3">
 
-              <button className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900">
+              <button
+                onClick={() => setRegisterParticipantOpen(true)}
+                className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900"
+              >
 
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
                   <UserPlus size={19} />
@@ -893,6 +918,154 @@ export default function DashboardPage() {
         </div>
 
       </main>
+
+      {registerParticipantOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+
+              <div>
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  Ny registrering
+                </div>
+
+                <h2 className="text-xl font-bold">
+                  Registrer deltaker
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Fyll inn informasjonen mens du snakker med personen.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setRegisterParticipantOpen(false)}
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+              >
+                <X size={20} />
+              </button>
+
+            </div>
+
+
+            {/* Form */}
+            <div className="space-y-5 p-6">
+
+              {/* Name */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold">
+                  Navn
+                </label>
+
+                <input
+                  type="text"
+                  value={participantName}
+                  onChange={(e) => setParticipantName(e.target.value)}
+                  placeholder="F.eks. Ola Nordmann"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </div>
+
+
+              {/* Phone */}
+              <div>
+                <label className="mb-2 block text-sm font-semibold">
+                  Telefonnummer
+                </label>
+
+                <input
+                  type="tel"
+                  value={participantPhone}
+                  onChange={(e) => setParticipantPhone(e.target.value)}
+                  placeholder="F.eks. 12345678"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950"
+                />
+              </div>
+
+
+              {/* Courses */}
+              <div>
+
+                <div className="mb-2">
+                  <label className="block text-sm font-semibold">
+                    Kurs
+                  </label>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    Velg ett eller flere kurs.
+                  </p>
+                </div>
+
+
+                <div className="grid gap-2 sm:grid-cols-2">
+
+                  {availableCourses.map((course) => {
+
+                    const selected = selectedCourses.includes(course);
+
+                    return (
+                      <button
+                        key={course}
+                        type="button"
+                        onClick={() => toggleCourse(course)}
+                        className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
+                          selected
+                            ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
+                        }`}
+                      >
+
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs ${
+                            selected
+                              ? "border-blue-500 bg-blue-600 text-white"
+                              : "border-slate-300 dark:border-slate-600"
+                          }`}
+                        >
+                          {selected ? "✓" : ""}
+                        </span>
+
+                        {course}
+
+                      </button>
+                    );
+
+                  })}
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
+
+              <button
+                type="button"
+                onClick={() => setRegisterParticipantOpen(false)}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Avbryt
+              </button>
+
+              <button
+                type="button"
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+              >
+                Registrer deltaker
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
     </div>
   );
