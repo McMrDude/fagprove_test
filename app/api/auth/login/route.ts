@@ -8,6 +8,7 @@ const secret = new TextEncoder().encode(
 );
 
 export async function POST(request: Request) {
+    console.log("LOGIN API WAS CALLED");
   try {
     const body = await request.json();
 
