@@ -38,7 +38,7 @@ export default function LoginPage() {
 
         // Account successfully created.
         // Send user to login page.
-        router.push("/login");
+        router.push("/");
 
         } catch {
         setError("Kunne ikke kontakte serveren.");
