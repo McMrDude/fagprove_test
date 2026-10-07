@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Menu,
   X,
@@ -22,6 +22,11 @@ import {
   ClipboardList,
 } from "lucide-react";
 
+
+type Course = {
+  id: number;
+  name: string;
+};
 
 // --------------------------------------------------
 // MOCK DATA
@@ -146,22 +151,131 @@ export default function DashboardPage() {
 
   const [participantName, setParticipantName] = useState("");
   const [participantPhone, setParticipantPhone] = useState("");
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [selectedCourses, setSelectedCourses] = useState<number[]>([]);
 
-  const availableCourses = [
-    "Engelsk",
-    "Matematikk",
-    "Historie",
-    "Kjemi",
-    "Fysikk",
-  ];
+  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  
+  const [registering, setRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState("");
 
-  function toggleCourse(course: string) {
+  function closeRegistrationForm() {
+    setRegisterParticipantOpen(false);
+    setParticipantName("");
+    setParticipantPhone("");
+    setSelectedCourses([]);
+    setRegisterError("");
+  }
+
+  async function registerParticipant() {
+    setRegisterError("");
+
+    if (!participantName.trim()) {
+      setRegisterError("Skriv inn navnet til deltakeren.");
+      return;
+    }
+
+    if (!/^\d{8}$/.test(participantPhone)) {
+      setRegisterError("Telefonnummeret må være nøyaktig 8 sifre.");
+      return;
+    }
+
+    if (selectedCourses.length === 0) {
+      setRegisterError("Velg minst ett kurs.");
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      const response = await fetch("/api/participants", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: participantName,
+          phone: participantPhone,
+          courses: selectedCourses,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        setRegisterError(result.error);
+        return;
+      }
+
+      // Clear the form
+      setParticipantName("");
+      setParticipantPhone("");
+      setSelectedCourses([]);
+
+      // Close the registration window
+      setRegisterParticipantOpen(false);
+
+    } catch (error) {
+      console.error(error);
+
+      setRegisterError("Kunne ikke kontakte serveren.");
+    } finally {
+      setRegistering(false);
+    }
+  }
+  
+  useEffect(() => {
+    async function loadCourses() {
+      try {
+        const response = await fetch("/api/participants");
+
+        const result = await response.json();
+
+        if (result.success) {
+          setAvailableCourses(result.courses);
+        }
+      } catch (error) {
+        console.error("Kunne ikke hente kurs:", error);
+      }
+    }
+
+    loadCourses();
+  }, []);
+
+  function toggleCourse(courseId: number) {
     setSelectedCourses((current) =>
-      current.includes(course)
-        ? current.filter((item) => item !== course)
-        : [...current, course]
+      current.includes(courseId)
+        ? current.filter((id) => id !== courseId)
+        : [...current, courseId]
     );
+  }
+
+  async function submitParticipant() {
+    try {
+      const response = await fetch("/api/participants", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: participantName,
+          phone: participantPhone,
+          courses: selectedCourses,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error("Failed to submit participant");
+      }
+
+      setRegisterParticipantOpen(false);
+      setParticipantName("");
+      setParticipantPhone("");
+      setSelectedCourses([]);
+    } catch (error) {
+      console.error("Error submitting participant:", error);
+    }
   }
 
   return (
@@ -1003,21 +1117,19 @@ export default function DashboardPage() {
                 <div className="grid gap-2 sm:grid-cols-2">
 
                   {availableCourses.map((course) => {
-
-                    const selected = selectedCourses.includes(course);
+                    const selected = selectedCourses.includes(course.id);
 
                     return (
                       <button
-                        key={course}
+                        key={course.id}
                         type="button"
-                        onClick={() => toggleCourse(course)}
+                        onClick={() => toggleCourse(course.id)}
                         className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
                           selected
                             ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
                             : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
                         }`}
                       >
-
                         <span
                           className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs ${
                             selected
@@ -1028,11 +1140,9 @@ export default function DashboardPage() {
                           {selected ? "✓" : ""}
                         </span>
 
-                        {course}
-
+                        {course.name}
                       </button>
                     );
-
                   })}
 
                 </div>
@@ -1041,13 +1151,18 @@ export default function DashboardPage() {
 
             </div>
 
+            {registerError && (
+              <div className="mx-6 mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                {registerError}
+              </div>
+            )}
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
 
               <button
                 type="button"
-                onClick={() => setRegisterParticipantOpen(false)}
+                onClick={closeRegistrationForm}
                 className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 Avbryt
@@ -1055,9 +1170,11 @@ export default function DashboardPage() {
 
               <button
                 type="button"
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+                onClick={registerParticipant}
+                disabled={registering}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Registrer deltaker
+                {registering ? "Registrerer..." : "Registrer deltaker"}
               </button>
 
             </div>
