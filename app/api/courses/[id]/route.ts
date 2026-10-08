@@ -27,8 +27,7 @@ export async function GET(
         const { data, error } = await supabase
         .from("courses")
         .select("name, id")
-        .eq("id", thing)
-        .maybeSingle();
+        .in("id", thing)
 
         if (error) {
       console.error(error);
