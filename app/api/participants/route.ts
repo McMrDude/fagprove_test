@@ -4,8 +4,8 @@ import { supabase } from "../supabaseClient";
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from("courses")
-      .select("id, name")
+      .from("participants")
+      .select("id, name, phone_number")
       .order("name");
 
     if (error) {
@@ -14,7 +14,7 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
-          error: "Kunne ikke hente kurs.",
+          error: "Kunne ikke hente deltakere.",
         },
         { status: 500 }
       );
@@ -22,7 +22,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      courses: data,
+      participants: data,
     });
   } catch (error) {
     console.error(error);

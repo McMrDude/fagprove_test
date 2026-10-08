@@ -226,7 +226,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadCourses() {
       try {
-        const response = await fetch("/api/participants");
+        const response = await fetch("/api/courses");
 
         const result = await response.json();
 
@@ -247,35 +247,6 @@ export default function DashboardPage() {
         ? current.filter((id) => id !== courseId)
         : [...current, courseId]
     );
-  }
-
-  async function submitParticipant() {
-    try {
-      const response = await fetch("/api/participants", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: participantName,
-          phone: participantPhone,
-          courses: selectedCourses,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error("Failed to submit participant");
-      }
-
-      setRegisterParticipantOpen(false);
-      setParticipantName("");
-      setParticipantPhone("");
-      setSelectedCourses([]);
-    } catch (error) {
-      console.error("Error submitting participant:", error);
-    }
   }
 
   return (
