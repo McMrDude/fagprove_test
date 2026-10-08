@@ -16,12 +16,14 @@ export async function GET(
 
         const { id } = await params;
 
-        const thing = await supabase
-        .from("courses_participants")
+        const participant_ids = await supabase
+        .from("course_participants")
         .select("course_id")
         .eq("participant_id", id)
         .order("name");
-        
+
+        const thing = participant_ids.data?.map((item) => item.course_id) || [];
+
         const { data, error } = await supabase
         .from("courses")
         .select("name, id")
