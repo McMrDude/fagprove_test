@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Menu,
   X,
@@ -145,6 +146,8 @@ function SmallStat({
 // --------------------------------------------------
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [registerParticipantOpen, setRegisterParticipantOpen] = useState(false);
@@ -385,6 +388,7 @@ export default function DashboardPage() {
           <SidebarLink
             icon={<Users size={18} />}
             label="Deltakere"
+            onClick={() => router.push("/participants")}
           />
 
           <SidebarLink
