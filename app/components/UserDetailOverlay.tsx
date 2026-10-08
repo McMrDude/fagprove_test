@@ -16,6 +16,8 @@ export default function UserDetailOverlay({ id, name, phone }: { id: number; nam
             if (result.success) {
                 setUserCourses(result.courses);
             }
+
+            console.log("Should have gotten the bloody couses now", result.courses);
         }
         fetchParticipants();
     }, []);

@@ -12,6 +12,8 @@ export async function GET(
     }
 ) {
     try {
+        console.log("Fetching courses for participant...");
+
         const { id } = await params;
 
         const thing = await supabase
