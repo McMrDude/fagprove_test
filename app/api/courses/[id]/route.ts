@@ -29,9 +29,30 @@ export async function GET(
         .maybeSingle();
 
         if (error) {
-        console.error(error);
-        }
-    } catch (error) {
-        console.error(error);
+      console.error(error);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Kunne ikke hente kurs.",
+        },
+        { status: 500 }
+      );
     }
+
+    return NextResponse.json({
+      success: true,
+      courses: data,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "En uventet feil oppstod.",
+      },
+      { status: 500 }
+    );
+  }
 }
