@@ -20,7 +20,7 @@ export async function GET(
         .from("course_participants")
         .select("course_id")
         .eq("participant_id", id)
-        .order("name");
+        .order("id");
 
         const thing = participant_ids.data?.map((item) => item.course_id) || [];
 
