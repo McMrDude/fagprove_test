@@ -29,7 +29,7 @@ export default function TeachersPage() {
 
       <div>
         {teachers.length > 0 ? (
-          <ul>
+          <ul className="space-y-4 border-t border-slate-200 pt-4 dark:border-slate-700 m-5">
             {teachers.map((teacher) => (
               <li key={teacher.id}>
                 <h2>{teacher.name}</h2>
