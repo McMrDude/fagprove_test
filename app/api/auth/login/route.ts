@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // Find user
     const { data: user, error } = await supabase
       .from("users")
-      .select("id, name, email, password_hash")
+      .select("id, name, email, password_hash, role")
       .eq("email", email)
       .maybeSingle();
 
@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
     })
       .setProtectedHeader({
         alg: "HS256",
@@ -90,6 +91,7 @@ export async function POST(request: Request) {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
 
