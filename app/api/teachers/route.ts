@@ -4,8 +4,9 @@ import { supabase } from "../supabaseClient";
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from("teachers")
-      .select("*");
+      .from("users")
+      .select("*")
+      .eq("role", "teacher");
     if (error) throw error;
     return NextResponse.json(data);
   } catch (error) {

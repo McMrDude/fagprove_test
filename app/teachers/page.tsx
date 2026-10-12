@@ -37,7 +37,7 @@ export default function TeachersPage() {
             ))}
           </ul>
         ) : (
-          <p>Ingen lærere fundet.</p>
+          <p>Ingen lærere funnet.</p>
         )}
       </div>
     </div>
