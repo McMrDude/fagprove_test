@@ -399,6 +399,7 @@ export default function DashboardPage() {
           <SidebarLink
             icon={<GraduationCap size={18} />}
             label="Lærere"
+            onClick={() => router.push("/teachers")}
           />
 
           <SidebarLink
