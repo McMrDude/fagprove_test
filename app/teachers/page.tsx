@@ -6,6 +6,7 @@ interface Teacher {
   id: string;
   name: string;
   email: string;
+  phone_number: string;
 }
 
 export default function TeachersPage() {
@@ -33,6 +34,7 @@ export default function TeachersPage() {
               <li key={teacher.id}>
                 <h2>{teacher.name}</h2>
                 <p>{teacher.email}</p>
+                <p>{teacher.phone_number}</p>
               </li>
             ))}
           </ul>
