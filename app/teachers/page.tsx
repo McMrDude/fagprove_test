@@ -30,7 +30,7 @@ export default function TeachersPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -61,17 +61,19 @@ export default function TeachersPage() {
         );
       }
 
-      
-        setTeachers(
+      // Make sure every teacher ID is a string.
+      setTeachers(
         Array.isArray(teachersData)
-            ? teachersData.map((teacher: Teacher) => ({
-                ...teacher,
-                id: String(teacher.id),
+          ? teachersData.map((teacher: Teacher) => ({
+              ...teacher,
+              id: String(teacher.id),
             }))
-            : []
-        );
+          : []
+      );
+
       setCourses(assignmentData.courses ?? []);
 
+      // Build the dropdown selections from the saved database assignments.
       const selected: Record<string, string> = {};
 
       for (const course of assignmentData.courses ?? []) {
@@ -83,9 +85,7 @@ export default function TeachersPage() {
       setAssignments(selected);
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "En uventet feil oppstod."
+        err instanceof Error ? err.message : "En uventet feil oppstod."
       );
     } finally {
       setLoading(false);
@@ -104,7 +104,7 @@ export default function TeachersPage() {
       delete next[teacherId];
 
       if (courseId) {
-        // A subject can only be selected by one teacher.
+        // Keep a subject selected for only one teacher.
         for (const [otherTeacherId, selectedCourse] of Object.entries(next)) {
           if (selectedCourse === courseId) {
             delete next[otherTeacherId];
@@ -121,75 +121,72 @@ export default function TeachersPage() {
     setError("");
   }
 
-  async function saveAssignment(teacherId: string) {
-    setSavingId(teacherId);
+  async function sendAssignment(courseId: number, teacherId: number | null) {
+    const response = await fetch("/api/admin/course-teachers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        course_id: courseId,
+        teacher_id: teacherId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Kunne ikke lagre fagfordelingen.");
+    }
+  }
+
+  async function saveAllAssignments() {
+    setSavingAll(true);
     setError("");
     setMessage("");
 
-    const courseId = assignments[teacherId];
-
-    // Find the subject currently assigned to this teacher.
-    const currentCourse = courses.find(
-      (course) => String(course.teacher_id) === String(teacherId)
-    );
-
-    // If the teacher had a subject and now has none, remove that assignment.
-    if (!courseId && !currentCourse) {
-      setSavingId(null);
-      setMessage("Ingen endring nødvendig.");
-      return;
-    }
-
     try {
-      // First, clear the previous assignment if the teacher changed subjects.
-      if (currentCourse && String(currentCourse.id) !== courseId) {
-        const clearResponse = await fetch("/api/admin/course-teachers", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            course_id: currentCourse.id,
-            teacher_id: null,
-          }),
-        });
+      // Find which teacher is supposed to receive each subject.
+      const desiredTeacherByCourse = new Map<string, string>();
 
-        const clearData = await clearResponse.json();
-
-        if (!clearResponse.ok || !clearData.success) {
-          throw new Error(
-            clearData.error || "Kunne ikke fjerne det gamle faget."
-          );
+      for (const [teacherId, courseId] of Object.entries(assignments)) {
+        if (courseId) {
+          desiredTeacherByCourse.set(courseId, teacherId);
         }
       }
 
-      if (courseId) {
-        const response = await fetch("/api/admin/course-teachers", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            course_id: Number(courseId),
-            teacher_id: Number(teacherId),
-          }),
-        });
+      // First remove outdated assignments. This allows a teacher to change
+      // subjects without being temporarily assigned to two subjects.
+      for (const course of courses) {
+        if (course.teacher_id === null) {
+          continue;
+        }
 
-        const data = await response.json();
+        const desiredTeacherId =
+          desiredTeacherByCourse.get(String(course.id)) ?? null;
 
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.error || "Kunne ikke lagre fagfordelingen."
-          );
+        if (String(course.teacher_id) !== String(desiredTeacherId ?? "")) {
+          await sendAssignment(course.id, null);
         }
       }
 
-      setMessage("Fagfordelingen ble lagret.");
+      // Then save every selected teacher-subject assignment.
+      for (const [teacherId, courseId] of Object.entries(assignments)) {
+        if (!courseId) {
+          continue;
+        }
+
+        await sendAssignment(Number(courseId), Number(teacherId));
+      }
+
       await loadData();
+      setMessage("Alle fagfordelingene ble lagret.");
     } catch (err) {
       setError(
         err instanceof Error
-          ? err.message
-          : "Kunne ikke lagre fagfordelingen."
+          ? `${err.message} Noen endringer kan allerede være lagret. Oppdater siden for å kontrollere lagret status.`
+          : "Kunne ikke lagre alle fagfordelingene."
       );
     } finally {
-      setSavingId(null);
+      setSavingAll(false);
     }
   }
 
@@ -201,7 +198,20 @@ export default function TeachersPage() {
     )?.name;
   }
 
-  const assignedCount = Object.keys(assignments).length;
+  function hasChanged(teacherId: string) {
+    const savedCourse = courses.find(
+      (course) => String(course.teacher_id) === String(teacherId)
+    );
+
+    const savedCourseId = savedCourse ? String(savedCourse.id) : "";
+    const selectedCourseId = assignments[teacherId] ?? "";
+
+    return savedCourseId !== selectedCourseId;
+  }
+
+  const hasChanges = teachers.some((teacher) => hasChanged(teacher.id));
+
+  const assignedCount = Object.values(assignments).filter(Boolean).length;
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-8">
@@ -222,7 +232,7 @@ export default function TeachersPage() {
           <button
             type="button"
             onClick={loadData}
-            disabled={loading}
+            disabled={loading || savingAll}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
           >
             <span aria-hidden="true">↻</span>
@@ -245,9 +255,7 @@ export default function TeachersPage() {
               Fag med lærer
             </p>
             <p className="mt-2 text-3xl font-bold">
-              {loading
-                ? "—"
-                : courses.filter((course) => course.teacher_id !== null).length}
+              {loading ? "—" : assignedCount}
             </p>
           </div>
 
@@ -258,7 +266,7 @@ export default function TeachersPage() {
             <p className="mt-2 text-3xl font-bold">
               {loading
                 ? "—"
-                : courses.filter((course) => course.teacher_id === null).length}
+                : Math.max(courses.length - assignedCount, 0)}
             </p>
           </div>
         </section>
@@ -282,11 +290,34 @@ export default function TeachersPage() {
         )}
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="border-b border-slate-200 px-5 py-5 sm:px-6 dark:border-slate-800">
-            <h2 className="text-lg font-semibold">Læreroversikt</h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Velg hvilket fag hver lærer skal ha ansvar for, og lagre endringen.
-            </p>
+          <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-slate-800">
+            <div>
+              <h2 className="text-lg font-semibold">Læreroversikt</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Velg fag for hver lærer. Lagre alle endringene når du er ferdig.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={saveAllAssignments}
+              disabled={loading || savingAll || !hasChanges}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {savingAll ? (
+                <>
+                  <span
+                    className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                    aria-hidden="true"
+                  />
+                  Lagrer alle ...
+                </>
+              ) : hasChanges ? (
+                "Lagre alle endringer"
+              ) : (
+                "Alle endringer lagret"
+              )}
+            </button>
           </div>
 
           {loading ? (
@@ -308,12 +339,13 @@ export default function TeachersPage() {
               {teachers.map((teacher) => {
                 const assignedCourse = getAssignedCourseName(teacher.id);
                 const currentCourse = courses.find(
-                  (course) => String(course.teacher_id) === teacher.id
+                  (course) =>
+                    String(course.teacher_id) === String(teacher.id)
                 );
-                const changed =
-                  (currentCourse
-                    ? String(currentCourse.id)
-                    : "") !== (assignments[teacher.id] ?? "");
+                const changed = hasChanged(teacher.id);
+
+                // Show status based on the current dropdown selection.
+                const hasSelectedCourse = Boolean(assignments[teacher.id]);
 
                 return (
                   <article
@@ -339,8 +371,8 @@ export default function TeachersPage() {
                           {teacher.phone_number || "Ikke oppgitt telefonnummer"}
                         </p>
 
-                        <div className="mt-3">
-                          {currentCourse ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {hasSelectedCourse ? (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                               <span className="size-1.5 rounded-full bg-emerald-500" />
                               Har tildelt fag
@@ -349,6 +381,12 @@ export default function TeachersPage() {
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
                               <span className="size-1.5 rounded-full bg-amber-500" />
                               Ikke tildelt fag
+                            </span>
+                          )}
+
+                          {changed && (
+                            <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                              Ikke lagret
                             </span>
                           )}
                         </div>
@@ -366,34 +404,34 @@ export default function TeachersPage() {
                       <select
                         id={`course-${teacher.id}`}
                         value={assignments[teacher.id] ?? ""}
+                        disabled={savingAll}
                         onChange={(event) =>
                           updateAssignment(teacher.id, event.target.value)
                         }
-                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-indigo-950"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-indigo-950"
                       >
                         <option value="">Ikke tildelt</option>
                         {courses.map((course) => {
-                          const assignedToAnother = courses.some(
-                            (other) =>
-                              other.id === course.id &&
-                              other.teacher_id !== null &&
-                              String(other.teacher_id) !== teacher.id
-                          );
+                          const assignedToAnother =
+                            course.teacher_id !== null &&
+                            String(course.teacher_id) !== String(teacher.id);
 
-                          const selectedByAnother = Object.entries(assignments).some(
+                          const selectedByAnother = Object.entries(
+                            assignments
+                          ).some(
                             ([otherTeacherId, selectedCourse]) =>
-                              otherTeacherId !== teacher.id &&
+                              otherTeacherId !== String(teacher.id) &&
                               selectedCourse === String(course.id)
                           );
 
                           return (
                             <option
                               key={course.id}
-                              value={course.id}
+                              value={String(course.id)}
                               disabled={assignedToAnother || selectedByAnother}
                             >
                               {course.name}
-                              {(assignedToAnother || selectedByAnother)
+                              {assignedToAnother || selectedByAnother
                                 ? " (allerede tildelt)"
                                 : ""}
                             </option>
@@ -401,26 +439,14 @@ export default function TeachersPage() {
                         })}
                       </select>
 
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {assignedCourse
-                            ? `Valgt fag: ${assignedCourse}`
-                            : "Velg et fag for denne læreren."}
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={() => saveAssignment(teacher.id)}
-                          disabled={savingId !== null || !changed}
-                          className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {savingId === teacher.id
-                            ? "Lagrer ..."
-                            : changed
-                              ? "Lagre fag"
-                              : "Lagret"}
-                        </button>
-                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {assignedCourse
+                          ? `Valgt fag: ${assignedCourse}`
+                          : "Velg et fag for denne læreren."}
+                        {currentCourse && !hasSelectedCourse
+                          ? " Det lagrede faget fjernes når du lagrer."
+                          : ""}
+                      </p>
                     </div>
                   </article>
                 );
