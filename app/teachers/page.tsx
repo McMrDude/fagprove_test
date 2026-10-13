@@ -61,7 +61,15 @@ export default function TeachersPage() {
         );
       }
 
-      setTeachers(Array.isArray(teachersData) ? teachersData : []);
+      
+        setTeachers(
+        Array.isArray(teachersData)
+            ? teachersData.map((teacher: Teacher) => ({
+                ...teacher,
+                id: String(teacher.id),
+            }))
+            : []
+        );
       setCourses(assignmentData.courses ?? []);
 
       const selected: Record<string, string> = {};
@@ -122,7 +130,7 @@ export default function TeachersPage() {
 
     // Find the subject currently assigned to this teacher.
     const currentCourse = courses.find(
-      (course) => String(course.teacher_id) === teacherId
+      (course) => String(course.teacher_id) === String(teacherId)
     );
 
     // If the teacher had a subject and now has none, remove that assignment.
