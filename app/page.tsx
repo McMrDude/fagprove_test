@@ -24,9 +24,13 @@ import {
 } from "lucide-react";
 
 
-type Course = {
+
+type Offering = {
   id: number;
-  name: string;
+  course_id: number;
+  course_name: string;
+  start_date: string | null;
+  session_count: number;
 };
 
 // --------------------------------------------------
@@ -154,103 +158,112 @@ export default function DashboardPage() {
 
   const [participantName, setParticipantName] = useState("");
   const [participantPhone, setParticipantPhone] = useState("");
-  const [selectedCourses, setSelectedCourses] = useState<number[]>([]);
 
-  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+  const [selectedOfferings, setSelectedOfferings] = useState<number[]>([]);
+  const [availableOfferings, setAvailableOfferings] = useState<Offering[]>([]);
+  const [loadingOfferings, setLoadingOfferings] = useState(false);
   
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState("");
 
-  function closeRegistrationForm() {
-    setRegisterParticipantOpen(false);
-    setParticipantName("");
-    setParticipantPhone("");
-    setSelectedCourses([]);
-    setRegisterError("");
+
+function closeRegistrationForm() {
+  setRegisterParticipantOpen(false);
+  setParticipantName("");
+  setParticipantPhone("");
+  setSelectedOfferings([]);
+  setRegisterError("");
+}
+
+async function registerParticipant() {
+  setRegisterError("");
+
+  if (!participantName.trim()) {
+    setRegisterError("Skriv inn navnet til deltakeren.");
+    return;
   }
 
-  async function registerParticipant() {
-    setRegisterError("");
+  if (!/^\d{8}$/.test(participantPhone)) {
+    setRegisterError("Telefonnummeret må være nøyaktig 8 sifre.");
+    return;
+  }
 
-    if (!participantName.trim()) {
-      setRegisterError("Skriv inn navnet til deltakeren.");
+  if (selectedOfferings.length === 0) {
+    setRegisterError("Velg minst ett kurs.");
+    return;
+  }
+
+  setRegistering(true);
+
+  try {
+    const response = await fetch("/api/participants", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: participantName.trim(),
+        phone: participantPhone,
+        offeringIds: selectedOfferings,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      setRegisterError(
+        result.error || "Kunne ikke registrere deltakeren."
+      );
       return;
     }
 
-    if (!/^\d{8}$/.test(participantPhone)) {
-      setRegisterError("Telefonnummeret må være nøyaktig 8 sifre.");
-      return;
-    }
+    closeRegistrationForm();
+  } catch (error) {
+    console.error(error);
+    setRegisterError("Kunne ikke kontakte serveren.");
+  } finally {
+    setRegistering(false);
+  }
+}
 
-    if (selectedCourses.length === 0) {
-      setRegisterError("Velg minst ett kurs.");
-      return;
-    }
-
-    setRegistering(true);
+useEffect(() => {
+  async function loadOfferings() {
+    setLoadingOfferings(true);
 
     try {
-      const response = await fetch("/api/participants", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: participantName,
-          phone: participantPhone,
-          courses: selectedCourses,
-        }),
-      });
+      const response = await fetch(
+        "/api/participants/registration-options"
+      );
 
       const result = await response.json();
 
-      if (!result.success) {
-        setRegisterError(result.error);
-        return;
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error || "Kunne ikke hente tilgjengelige kurs."
+        );
       }
 
-      // Clear the form
-      setParticipantName("");
-      setParticipantPhone("");
-      setSelectedCourses([]);
-
-      // Close the registration window
-      setRegisterParticipantOpen(false);
-
+      setAvailableOfferings(result.offerings);
     } catch (error) {
-      console.error(error);
-
-      setRegisterError("Kunne ikke kontakte serveren.");
+      console.error("Kunne ikke hente kurs:", error);
+      setRegisterError(
+        "Kunne ikke hente tilgjengelige kurs. Prøv å åpne registreringen på nytt."
+      );
     } finally {
-      setRegistering(false);
+      setLoadingOfferings(false);
     }
   }
-  
-  useEffect(() => {
-    async function loadCourses() {
-      try {
-        const response = await fetch("/api/courses");
 
-        const result = await response.json();
+  loadOfferings();
+}, []);
 
-        if (result.success) {
-          setAvailableCourses(result.courses);
-        }
-      } catch (error) {
-        console.error("Kunne ikke hente kurs:", error);
-      }
-    }
-
-    loadCourses();
-  }, []);
-
-  function toggleCourse(courseId: number) {
-    setSelectedCourses((current) =>
-      current.includes(courseId)
-        ? current.filter((id) => id !== courseId)
-        : [...current, courseId]
-    );
-  }
+function toggleOffering(offeringId: number) {
+  setSelectedOfferings((current) =>
+    current.includes(offeringId)
+      ? current.filter((id) => id !== offeringId)
+      : [...current, offeringId]
+  );
+}
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
@@ -1076,53 +1089,82 @@ export default function DashboardPage() {
               </div>
 
 
-              {/* Courses */}
+              
+              {/* Scheduled course offerings */}
               <div>
-
                 <div className="mb-2">
                   <label className="block text-sm font-semibold">
-                    Kurs
+                    Velg kurs
                   </label>
 
                   <p className="mt-1 text-xs text-slate-400">
-                    Velg ett eller flere kurs.
+                    Velg de planlagte kursene deltakeren skal delta på.
                   </p>
                 </div>
 
+                {loadingOfferings ? (
+                  <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500 dark:border-slate-700">
+                    Henter tilgjengelige kurs...
+                  </div>
+                ) : availableOfferings.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+                    Ingen kommende kurs er tilgjengelige for registrering.
+                    Opprett en kursplan først.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {availableOfferings.map((offering) => {
+                      const selected = selectedOfferings.includes(offering.id);
 
-                <div className="grid gap-2 sm:grid-cols-2">
+                      const formattedDate = offering.start_date
+                        ? new Date(
+                            `${offering.start_date}T12:00:00`
+                          ).toLocaleDateString("nb-NO", {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          })
+                        : "Dato ikke satt";
 
-                  {availableCourses.map((course) => {
-                    const selected = selectedCourses.includes(course.id);
-
-                    return (
-                      <button
-                        key={course.id}
-                        type="button"
-                        onClick={() => toggleCourse(course.id)}
-                        className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
-                          selected
-                            ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs ${
+                      return (
+                        <button
+                          key={offering.id}
+                          type="button"
+                          onClick={() => toggleOffering(offering.id)}
+                          className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${
                             selected
-                              ? "border-blue-500 bg-blue-600 text-white"
-                              : "border-slate-300 dark:border-slate-600"
+                              ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800"
                           }`}
                         >
-                          {selected ? "✓" : ""}
-                        </span>
+                          <span
+                            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs ${
+                              selected
+                                ? "border-blue-500 bg-blue-600 text-white"
+                                : "border-slate-300 dark:border-slate-600"
+                            }`}
+                          >
+                            {selected ? "✓" : ""}
+                          </span>
 
-                        {course.name}
-                      </button>
-                    );
-                  })}
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold">
+                              {offering.course_name}
+                            </span>
 
-                </div>
+                            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                              Starter {formattedDate}
+                            </span>
 
+                            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                              {offering.session_count} undervisningsøkter
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -1147,7 +1189,11 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={registerParticipant}
-                disabled={registering}
+                disabled={
+                  registering ||
+                  loadingOfferings ||
+                  availableOfferings.length === 0
+                }
                 className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {registering ? "Registrerer..." : "Registrer deltaker"}

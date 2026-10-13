@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import { supabase } from "../supabaseClient";
 
@@ -12,10 +13,7 @@ export async function GET() {
       console.error(error);
 
       return NextResponse.json(
-        {
-          success: false,
-          error: "Kunne ikke hente deltakere.",
-        },
+        { success: false, error: "Kunne ikke hente deltakere." },
         { status: 500 }
       );
     }
@@ -28,29 +26,28 @@ export async function GET() {
     console.error(error);
 
     return NextResponse.json(
-      {
-        success: false,
-        error: "En uventet feil oppstod.",
-      },
+      { success: false, error: "En uventet feil oppstod." },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
+  let participantId: number | null = null;
+
   try {
-    // Get the data sent from the frontend
     const body = await request.json();
 
-    const name = body.name?.trim();
-    const phone = body.phone?.trim();
-    const courses = body.courses;
+    const name =
+      typeof body.name === "string" ? body.name.trim() : "";
+    const phone =
+      typeof body.phone === "string" ? body.phone.trim() : "";
+    const offeringIds: number[] = Array.isArray(body.offeringIds)
+      ? body.offeringIds.map(Number)
+      : [];
 
-    // -------------------------------
-    // Basic validation
-    // -------------------------------
-
-    if (!name || !phone || !Array.isArray(courses) || courses.length === 0) {
+    // Validate the submitted information.
+    if (!name || !phone || offeringIds.length === 0) {
       return NextResponse.json(
         {
           success: false,
@@ -70,51 +67,61 @@ export async function POST(request: Request) {
       );
     }
 
-    // -------------------------------
-    // Get the selected courses
-    // -------------------------------
-
-    const { data: selectedCourses, error: coursesError } = await supabase
-      .from("courses")
-      .select("id, name")
-      .in("id", courses);
-
-    if (coursesError) {
-      console.error(coursesError);
-
+    if (
+      offeringIds.some(
+        (id) => !Number.isSafeInteger(id) || id <= 0
+      ) ||
+      new Set(offeringIds).size !== offeringIds.length
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Kunne ikke finne kursene.",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!selectedCourses || selectedCourses.length !== courses.length) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Ett eller flere av de valgte kursene finnes ikke.",
+          error: "Ugyldig eller duplisert kursvalg.",
         },
         { status: 400 }
       );
     }
 
-    // -------------------------------
-    // Create participant
-    // -------------------------------
+    // Find the selected offerings and their associated subjects.
+    const { data: offerings, error: offeringsError } = await supabase
+      .from("course_offerings")
+      .select("id, course_id")
+      .in("id", offeringIds);
 
-    const { data: participant, error: participantError } = await supabase
-      .from("participants")
-      .insert({
-        name,
-        phone_number: phone,
-      })
-      .select("id, name, phone_number")
-      .single();
+    if (offeringsError) {
+      console.error(offeringsError);
 
-    if (participantError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Kunne ikke hente de valgte kursene.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!offerings || offerings.length !== offeringIds.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Ett eller flere valgte kurs finnes ikke.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Create the participant.
+    const { data: participant, error: participantError } =
+      await supabase
+        .from("participants")
+        .insert({
+          name,
+          phone_number: phone,
+        })
+        .select("id, name, phone_number")
+        .single();
+
+    if (participantError || !participant) {
       console.error(participantError);
 
       return NextResponse.json(
@@ -126,46 +133,47 @@ export async function POST(request: Request) {
       );
     }
 
-    // -------------------------------
-    // Connect participant to courses
-    // -------------------------------
+    participantId = participant.id;
 
-    const courseConnections = selectedCourses.map((course) => ({
+    // Connect the participant to each selected offering.
+    // course_id is derived from the offering, not trusted from the form.
+    const connections = offerings.map((offering) => ({
       participant_id: participant.id,
-      course_id: course.id,
+      course_id: offering.course_id,
+      offering_id: offering.id,
     }));
 
     const { error: connectionError } = await supabase
       .from("course_participants")
-      .insert(courseConnections);
+      .insert(connections);
 
     if (connectionError) {
       console.error(connectionError);
 
-      // Remove the participant if the course connection failed
-      await supabase
+      // Roll back the participant if enrollment fails.
+      const { error: cleanupError } = await supabase
         .from("participants")
         .delete()
         .eq("id", participant.id);
 
+      if (cleanupError) {
+        console.error("Could not clean up participant:", cleanupError);
+      }
+
       return NextResponse.json(
         {
           success: false,
-          error: "Deltakeren ble opprettet, men kursene kunne ikke registreres.",
+          error: "Deltakeren ble opprettet, men kursregistreringen feilet.",
         },
         { status: 500 }
       );
     }
 
-    // -------------------------------
-    // Success
-    // -------------------------------
-
     return NextResponse.json(
       {
         success: true,
         participant,
-        courses: selectedCourses,
+        offerings,
       },
       { status: 201 }
     );
@@ -173,10 +181,7 @@ export async function POST(request: Request) {
     console.error(error);
 
     return NextResponse.json(
-      {
-        success: false,
-        error: "En uventet feil oppstod.",
-      },
+      { success: false, error: "En uventet feil oppstod." },
       { status: 500 }
     );
   }
