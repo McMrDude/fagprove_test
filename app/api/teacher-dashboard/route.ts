@@ -5,7 +5,6 @@ import { supabase } from "../supabaseClient";
 
 export async function GET(request: NextRequest) {
     try {
-        // 1. Read the login token from the browser's cookie.
         const token = request.cookies.get("auth_token")?.value;
 
         if (!token) {
@@ -15,22 +14,20 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // 2. Verify that the token was signed with our secret.
         const secretValue = process.env.AUTH_SECRET;
 
         if (!secretValue) {
-            console.error("AUTH_SECRET is missing.");
-
             return NextResponse.json(
                 { success: false, error: "Serveren er ikke riktig konfigurert." },
                 { status: 500 }
             );
         }
 
-        const secret = new TextEncoder().encode(secretValue);
-        const { payload } = await jwtVerify(token, secret);
+        const { payload } = await jwtVerify(
+            token,
+            new TextEncoder().encode(secretValue)
+        );
 
-        // 3. Only teachers may access this endpoint.
         if (payload.role !== "teacher" || !payload.id) {
             return NextResponse.json(
                 { success: false, error: "Du har ikke tilgang." },
@@ -38,7 +35,7 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // 4. Find the teacher using the ID from the verified token.
+        // Get the logged-in teacher.
         const { data: teacher, error: teacherError } = await supabase
             .from("users")
             .select("id, name, email")
@@ -46,14 +43,7 @@ export async function GET(request: NextRequest) {
             .eq("role", "teacher")
             .maybeSingle();
 
-        if (teacherError) {
-            console.error("Could not fetch teacher:", teacherError);
-
-            return NextResponse.json(
-                { success: false, error: "Kunne ikke hente læreropplysninger." },
-                { status: 500 }
-            );
-        }
+        if (teacherError) throw teacherError;
 
         if (!teacher) {
             return NextResponse.json(
@@ -62,54 +52,143 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // 5. Find the course assigned to this teacher.
+        // Find the subject assigned to this teacher.
         const { data: course, error: courseError } = await supabase
             .from("courses")
             .select("id, name")
             .eq("teacher_id", teacher.id)
             .maybeSingle();
 
-        if (courseError) {
-            console.error("Could not fetch teacher course:", courseError);
+        if (courseError) throw courseError;
 
-            return NextResponse.json(
-                { success: false, error: "Kunne ikke hente faget ditt." },
-                { status: 500 }
-            );
+        if (!course) {
+            return NextResponse.json({
+                success: true,
+                teacher,
+                course: null,
+                offering: null,
+                nextSession: null,
+                sessions: [],
+                stats: {
+                    participants: 0,
+                    completedSessions: 0,
+                    totalSessions: 0,
+                    absences: 0,
+                },
+            });
         }
 
-        // 6. Send the information to the dashboard.
+        // Get all scheduled offerings for this subject.
+        const { data: offerings, error: offeringsError } = await supabase
+            .from("course_offerings")
+            .select("id, course_id, created_at")
+            .eq("course_id", course.id)
+            .order("created_at", { ascending: false });
+
+        if (offeringsError) throw offeringsError;
+
+        if (!offerings || offerings.length === 0) {
+            return NextResponse.json({
+                success: true,
+                teacher,
+                course,
+                offering: null,
+                nextSession: null,
+                sessions: [],
+                stats: {
+                    participants: 0,
+                    completedSessions: 0,
+                    totalSessions: 0,
+                    absences: 0,
+                },
+            });
+        }
+
+        // Get the sessions belonging to these offerings.
+        const offeringIds = offerings.map((item) => item.id);
+
+        const { data: allSessions, error: sessionsError } = await supabase
+            .from("course_sessions")
+            .select("id, offering_id, session_number, session_date")
+            .in("offering_id", offeringIds)
+            .order("session_date", { ascending: true });
+
+        if (sessionsError) throw sessionsError;
+
+        const sessions = allSessions ?? [];
+
+        // Use the Norwegian calendar date for date comparisons.
+        const today = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Oslo",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        }).format(new Date());
+
+        // Prefer the offering with the next upcoming session.
+        const nextSession =
+            sessions.find((session) => session.session_date >= today) ?? null;
+
+        const activeOffering =
+            offerings.find((item) => item.id === nextSession?.offering_id) ??
+            offerings[0];
+
+        const activeSessions = sessions.filter(
+            (session) => session.offering_id === activeOffering.id
+        );
+
+        const sessionIds = activeSessions.map((session) => session.id);
+
+        // Get participants registered for this specific offering.
+        const { data: enrollments, error: enrollmentsError } =
+            await supabase
+                .from("course_participants")
+                .select("participant_id")
+                .eq("offering_id", activeOffering.id);
+
+        if (enrollmentsError) throw enrollmentsError;
+
+        // Get the recorded attendance for this offering.
+        let absences = 0;
+
+        if (sessionIds.length > 0) {
+            const { data: attendanceRows, error: attendanceError } =
+                await supabase
+                    .from("attendance")
+                    .select("present")
+                    .in("session_id", sessionIds);
+
+            if (attendanceError) throw attendanceError;
+
+            absences = (attendanceRows ?? []).filter(
+                (row) => row.present === false
+            ).length;
+        }
+
         return NextResponse.json({
             success: true,
-            teacher: {
-                id: teacher.id,
-                name: teacher.name,
-                email: teacher.email,
+            teacher,
+            course,
+            offering: activeOffering,
+            nextSession,
+            sessions: activeSessions,
+            stats: {
+                participants: enrollments?.length ?? 0,
+                completedSessions: activeSessions.filter(
+                    (session) => session.session_date < today
+                ).length,
+                totalSessions: activeSessions.length,
+                absences,
             },
-            course: course
-                ? {
-                    id: course.id,
-                    name: course.name,
-                }
-                : null,
         });
     } catch (error) {
-        // Invalid, expired, or otherwise unverifiable token.
-        if (
-            error instanceof Error &&
-            (error.name === "JWTExpired" || error.name === "JWTClaimValidationFailed" ||
-             error.name === "JWSSignatureVerificationFailed" || error.name === "JWSInvalid")
-        ) {
-            return NextResponse.json(
-                { success: false, error: "Innloggingen har utløpt. Logg inn igjen." },
-                { status: 401 }
-            );
-        }
-
         console.error("Teacher dashboard API error:", error);
 
         return NextResponse.json(
-            { success: false, error: "Noe gikk galt da læreroversikten skulle hentes." },
+            {
+                success: false,
+                error: "Kunne ikke hente læreroversikten.",
+            },
             { status: 500 }
         );
     }

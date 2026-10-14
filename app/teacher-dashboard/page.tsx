@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+
 type TeacherDashboardData = {
     teacher: {
         id: number | string;
@@ -14,6 +15,29 @@ type TeacherDashboardData = {
         id: number | string;
         name: string;
     } | null;
+    offering: {
+        id: number | string;
+        course_id: number | string;
+        created_at: string;
+    } | null;
+    nextSession: {
+        id: number | string;
+        offering_id: number | string;
+        session_number: number;
+        session_date: string;
+    } | null;
+    sessions: {
+        id: number | string;
+        offering_id: number | string;
+        session_number: number;
+        session_date: string;
+    }[];
+    stats: {
+        participants: number;
+        completedSessions: number;
+        totalSessions: number;
+        absences: number;
+    };
 };
 
 export default function TeacherDashboardPage() {
@@ -34,10 +58,7 @@ export default function TeacherDashboardPage() {
                     return;
                 }
 
-                setDashboard({
-                    teacher: result.teacher,
-                    course: result.course,
-                });
+                setDashboard(result);
             } catch {
                 setError("Kunne ikke kontakte serveren.");
             } finally {
@@ -47,6 +68,21 @@ export default function TeacherDashboardPage() {
 
         loadDashboard();
     }, []);
+
+    
+    const formatDate = (date: string) =>
+        new Intl.DateTimeFormat("nb-NO", {
+            dateStyle: "long",
+            timeZone: "UTC",
+        }).format(new Date(`${date}T12:00:00Z`));
+
+    const progress = dashboard?.stats.totalSessions
+        ? Math.round(
+            (dashboard.stats.completedSessions /
+                dashboard.stats.totalSessions) * 100
+        )
+        : 0;
+
 
     return (
         <main className="min-h-screen bg-[#F7F7F2] px-5 py-8 text-slate-900 sm:px-8 lg:px-12">
@@ -197,6 +233,111 @@ export default function TeacherDashboardPage() {
                             <p className="mt-2 text-sm leading-6 text-slate-500">
                                 Følg med på deltakernes oppmøte gjennom kursperioden.
                             </p>
+                        </div>
+                    </div>
+                </section>
+
+                
+                {/* Live teacher statistics */}
+                <section>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold">Kurs akkurat nå</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Oppdatert fra kursdatabasen din.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        {/* Participants */}
+                        <div className="rounded-3xl border border-slate-200/70 bg-white p-5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-500">
+                                    Deltakere
+                                </span>
+                                <span className="text-xl">👥</span>
+                            </div>
+
+                            <p className="mt-4 text-3xl font-black">
+                                {loading ? "—" : dashboard?.stats.participants ?? 0}
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-400">
+                                På valgt kurs
+                            </p>
+                        </div>
+
+                        {/* Sessions */}
+                        <div className="rounded-3xl border border-slate-200/70 bg-white p-5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-500">
+                                    Kursøkter
+                                </span>
+                                <span className="text-xl">📚</span>
+                            </div>
+
+                            <p className="mt-4 text-3xl font-black">
+                                {loading
+                                    ? "—"
+                                    : `${dashboard?.stats.completedSessions ?? 0}/${dashboard?.stats.totalSessions ?? 0}`}
+                            </p>
+
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                    className="h-full rounded-full bg-indigo-600 transition-all"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+
+                            <p className="mt-2 text-xs text-slate-400">
+                                Økter med dato som har passert
+                            </p>
+                        </div>
+
+                        {/* Absences */}
+                        <div className="rounded-3xl border border-slate-200/70 bg-white p-5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-slate-500">
+                                    Registrert fravær
+                                </span>
+                                <span className="text-xl">◷</span>
+                            </div>
+
+                            <p className="mt-4 text-3xl font-black">
+                                {loading ? "—" : dashboard?.stats.absences ?? 0}
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-400">
+                                Fraværsregistreringer på kurset
+                            </p>
+                        </div>
+
+                        {/* Next session */}
+                        <div className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-indigo-700">
+                                    Neste kursøkt
+                                </span>
+                                <span className="text-xl">📅</span>
+                            </div>
+
+                            {loading ? (
+                                <p className="mt-4 text-sm text-indigo-800">
+                                    Henter dato...
+                                </p>
+                            ) : dashboard?.nextSession ? (
+                                <>
+                                    <p className="mt-4 text-lg font-bold text-indigo-950">
+                                        {formatDate(dashboard.nextSession.session_date)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-indigo-700">
+                                        Økt {dashboard.nextSession.session_number}
+                                    </p>
+                                </>
+                            ) : (
+                                <p className="mt-4 text-sm text-indigo-800">
+                                    Ingen kommende økter
+                                </p>
+                            )}
                         </div>
                     </div>
                 </section>
