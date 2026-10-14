@@ -255,7 +255,7 @@ export default function CoursesPage() {
             />
             <StatCard
               icon={<Users size={18} />}
-              label="Påmeldinger"
+              label="Alle påmeldinger"
               value={stats.participants}
               tint="sky"
             />
@@ -265,6 +265,102 @@ export default function CoursesPage() {
               value={stats.active}
               tint="emerald"
             />
+          </section>
+        )}
+
+        
+        {/* Report: participants enrolled in planned courses */}
+        {!loading && !error && data && (
+          <section className="mb-7 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm sm:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-950">
+                  Rapport: Planlagte kurs
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Antall deltakere på kurs som ennå ikke har startet.
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-indigo-50 px-4 py-3">
+                <p className="text-xs font-semibold text-indigo-600">
+                  Totalt antall påmeldinger
+                </p>
+                <p className="text-2xl font-extrabold text-indigo-800">
+                  {(data.courses ?? []).reduce(
+                    (total, course) =>
+                      total +
+                      course.offerings
+                        .filter((offering) => offering.status === "planned")
+                        .reduce(
+                          (sum, offering) =>
+                            sum + offering.participants.length,
+                          0
+                        ),
+                    0
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {(data.courses ?? []).some((course) =>
+              course.offerings.some(
+                (offering) => offering.status === "planned"
+              )
+            ) ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="grid grid-cols-[1fr_auto] bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
+                  <span>Kurs</span>
+                  <span>Påmeldte</span>
+                </div>
+
+                {(data.courses ?? [])
+                  .filter((course) =>
+                    course.offerings.some(
+                      (offering) => offering.status === "planned"
+                    )
+                  )
+                  .map((course) => {
+                    const plannedOfferings = course.offerings.filter(
+                      (offering) => offering.status === "planned"
+                    );
+
+                    const count = plannedOfferings.reduce(
+                      (sum, offering) =>
+                        sum + offering.participants.length,
+                      0
+                    );
+
+                    return (
+                      <div
+                        key={String(course.id)}
+                        className="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-slate-100 px-4 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {course.name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {plannedOfferings.length} planlagt kursoppsett
+                          </p>
+                        </div>
+
+                        <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-bold text-indigo-700">
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                Det finnes ingen planlagte kurs med oppstart frem i tid.
+              </p>
+            )}
+
+            <p className="mt-3 text-xs text-slate-400">
+              Deltakere som er påmeldt flere kurs telles én gang per kursoppsett.
+            </p>
           </section>
         )}
 
