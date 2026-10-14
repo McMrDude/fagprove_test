@@ -2,8 +2,52 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type TeacherDashboardData = {
+    teacher: {
+        id: number | string;
+        name: string;
+        email: string;
+    };
+    course: {
+        id: number | string;
+        name: string;
+    } | null;
+};
 
 export default function TeacherDashboardPage() {
+    const [dashboard, setDashboard] =
+    useState<TeacherDashboardData | null>(null);
+
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        async function loadDashboard() {
+            try {
+                const response = await fetch("/api/teacher-dashboard");
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    setError(result.error || "Kunne ikke hente læreroversikten.");
+                    return;
+                }
+
+                setDashboard({
+                    teacher: result.teacher,
+                    course: result.course,
+                });
+            } catch {
+                setError("Kunne ikke kontakte serveren.");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        loadDashboard();
+    }, []);
+
     return (
         <main className="min-h-screen bg-[#F7F7F2] px-5 py-8 text-slate-900 sm:px-8 lg:px-12">
             <div className="mx-auto max-w-7xl space-y-8">
@@ -16,12 +60,16 @@ export default function TeacherDashboardPage() {
                         </p>
 
                         <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
-                            Ditt klasserom<span className="text-indigo-600">.</span>
+                            {loading
+                                ? "Laster oversikten..."
+                                : `Hei, ${dashboard?.teacher.name ?? "lærer"}`}
+                            <span className="text-indigo-600">.</span>
                         </h1>
 
                         <p className="mt-3 max-w-xl text-slate-500">
-                            Alt du trenger for å holde oversikt over kursene,
-                            deltakerne og oppmøtet ditt.
+                            {dashboard?.course
+                                ? `Du har ansvar for ${dashboard.course.name}. Her finner du kursene, deltakerne og oppmøtet ditt.`
+                                : "Her finner du oversikten over kursene, deltakerne og oppmøtet ditt."}
                         </p>
                     </div>
 
@@ -33,12 +81,27 @@ export default function TeacherDashboardPage() {
                     </div>
                 </header>
 
+                {error && (
+                    <div
+                        role="alert"
+                        className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                    >
+                        {error}
+                    </div>
+                )}
+
                 {/* Welcome banner */}
                 <section className="relative overflow-hidden rounded-[2rem] bg-indigo-950 p-7 text-white sm:p-10">
                     <div className="relative z-10 max-w-2xl">
                         <p className="text-sm font-semibold text-indigo-300">
-                            KLAR FOR NESTE KURS?
+                            DITT FAGOMRÅDE
                         </p>
+
+                        <h3 className="mt-2 text-xl font-bold">
+                            {loading
+                                ? "Henter faget ditt..."
+                                : dashboard?.course?.name ?? "Ingen fag tildelt"}
+                        </h3>
 
                         <h2 className="mt-3 text-3xl font-bold leading-tight sm:text-4xl">
                             God undervisning starter med god oversikt.
