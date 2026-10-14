@@ -204,6 +204,55 @@ export async function GET(request: NextRequest) {
       (item) => item.status === "completed"
     );
 
+    
+    // Build participant reports for planned and active courses.
+    const buildParticipantReport = (
+      matchingOfferings: typeof offeringStats
+    ) => {
+      const matchingOfferingIds = new Set(
+        matchingOfferings.map((item) => String(item.offering.id))
+      );
+
+      return enrollments.flatMap((enrollment) => {
+        const offeringId = String(enrollment.offering_id);
+
+        if (
+          enrollment.offering_id === null ||
+          !matchingOfferingIds.has(offeringId)
+        ) {
+          return [];
+        }
+
+        const participant = participantById.get(
+          String(enrollment.participant_id)
+        );
+
+        const offering = offeringById.get(offeringId);
+
+        if (!participant || !offering) {
+          return [];
+        }
+
+        const course = courseById.get(String(offering.course_id));
+
+        return [{
+          participant_id: participant.id,
+          participant_name: participant.name,
+          phone_number: participant.phone_number,
+          course_name: course?.name ?? "Ukjent fag",
+          offering_id: offering.id,
+        }];
+      });
+    };
+
+    const plannedParticipantReport =
+      buildParticipantReport(plannedOfferings);
+
+    const activeParticipantReport =
+      buildParticipantReport(activeOfferings);
+
+
+
     // A participant needs course placement if they have no valid offering enrollment.
     const participantsWithoutPlacement = participants.filter(
       (participant) =>
@@ -348,6 +397,10 @@ export async function GET(request: NextRequest) {
         activeOfferings: activeOfferings.length,
         plannedOfferings: plannedOfferings.length,
         completedOfferings: completedOfferings.length,
+      },
+      participantReports: {
+        planned: plannedParticipantReport,
+        active: activeParticipantReport,
       },
       offerings: offeringStats.map(({ offering, dates, status }) => ({
         id: offering.id,
