@@ -167,77 +167,6 @@ export default function TeacherDashboardPage() {
                     />
                 </section>
 
-                {/* Overview cards */}
-                <section>
-                    <div className="mb-4">
-                        <h2 className="text-xl font-bold">Din oversikt</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                            Snarveier til de viktigste læreroppgavene.
-                        </p>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        <Link
-                            href="/course-planning"
-                            className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-950/5"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-2xl">
-                                    📅
-                                </div>
-                                <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-indigo-600">
-                                    →
-                                </span>
-                            </div>
-
-                            <h3 className="mt-5 text-lg font-bold">
-                                Kursplanlegging
-                            </h3>
-
-                            <p className="mt-2 text-sm leading-6 text-slate-500">
-                                Sett opp kurs og planlegg de fem ukentlige øktene.
-                            </p>
-                        </Link>
-
-                        <Link
-                            href="/teachers/attendance"
-                            className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-950/5"
-                        >
-                            <div className="flex items-start justify-between">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-2xl">
-                                    ✓
-                                </div>
-                                <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-emerald-600">
-                                    →
-                                </span>
-                            </div>
-
-                            <h3 className="mt-5 text-lg font-bold">
-                                Oppmøteregistrering
-                            </h3>
-
-                            <p className="mt-2 text-sm leading-6 text-slate-500">
-                                Se deltakerlisten og registrer hvem som møter opp.
-                            </p>
-                        </Link>
-
-                        <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-2xl">
-                                👥
-                            </div>
-
-                            <h3 className="mt-5 text-lg font-bold">
-                                Deltakeroppfølging
-                            </h3>
-
-                            <p className="mt-2 text-sm leading-6 text-slate-500">
-                                Følg med på deltakernes oppmøte gjennom kursperioden.
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
-                
                 {/* Live teacher statistics */}
                 <section>
                     <div className="mb-4">
@@ -338,6 +267,76 @@ export default function TeacherDashboardPage() {
                                     Ingen kommende økter
                                 </p>
                             )}
+                        </div>
+                    </div>
+                </section>
+
+                {/* Overview cards */}
+                <section>
+                    <div className="mb-4">
+                        <h2 className="text-xl font-bold">Din oversikt</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Snarveier til de viktigste læreroppgavene.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <Link
+                            href="/course-planning"
+                            className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-950/5"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-2xl">
+                                    📅
+                                </div>
+                                <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-indigo-600">
+                                    →
+                                </span>
+                            </div>
+
+                            <h3 className="mt-5 text-lg font-bold">
+                                Kursplanlegging
+                            </h3>
+
+                            <p className="mt-2 text-sm leading-6 text-slate-500">
+                                Sett opp kurs og planlegg de fem ukentlige øktene.
+                            </p>
+                        </Link>
+
+                        <Link
+                            href="/teachers/attendance"
+                            className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-950/5"
+                        >
+                            <div className="flex items-start justify-between">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-2xl">
+                                    ✓
+                                </div>
+                                <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-emerald-600">
+                                    →
+                                </span>
+                            </div>
+
+                            <h3 className="mt-5 text-lg font-bold">
+                                Oppmøteregistrering
+                            </h3>
+
+                            <p className="mt-2 text-sm leading-6 text-slate-500">
+                                Se deltakerlisten og registrer hvem som møter opp.
+                            </p>
+                        </Link>
+
+                        <div className="rounded-3xl border border-slate-200/70 bg-white p-6">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-2xl">
+                                👥
+                            </div>
+
+                            <h3 className="mt-5 text-lg font-bold">
+                                Deltakeroppfølging
+                            </h3>
+
+                            <p className="mt-2 text-sm leading-6 text-slate-500">
+                                Følg med på deltakernes oppmøte gjennom kursperioden.
+                            </p>
                         </div>
                     </div>
                 </section>
