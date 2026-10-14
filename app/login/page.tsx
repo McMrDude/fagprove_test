@@ -1,14 +1,14 @@
+
 "use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../api/supabaseClient";
 
 export default function LoginPage() {
     const router = useRouter();
+
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
@@ -17,59 +17,74 @@ export default function LoginPage() {
         setLoading(true);
         setError("");
 
-        try{
-    const response = await fetch("/api/auth/login", {
-            method: "POST",
-            headers: {
-            "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-            email,
-            password,
-            }),
-        });
+        try {
+            const response = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    email,
+                    password,
+                }),
+            });
 
-        const result = await response.json();
+            const result = await response.json();
 
-        if (!result.success) {
-            setError(result.error);
-            return;
-        }
+            if (!response.ok || !result.success) {
+                setError(result.error || "Kunne ikke logge inn.");
+                return;
+            }
 
-        // Account successfully created.
-        // Send user to login page.
-        router.push("/");
-
+            // Send the user to the correct homepage based on their role.
+            if (result.user.role === "teacher") {
+                router.push("/teacher-dashboard");
+            } else {
+                router.push("/");
+            }
         } catch {
-        setError("Kunne ikke kontakte serveren.");
+            setError("Kunne ikke kontakte serveren.");
         } finally {
-        setLoading(false);
+            setLoading(false);
         }
     };
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen py-2">
-            <h1 className="text-4xl font-bold mb-4">Logg inn</h1>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex min-h-screen flex-col items-center justify-center py-2">
+            <h1 className="mb-4 text-4xl font-bold">Logg inn</h1>
+
+            <form
+                onSubmit={handleSubmit}
+                className="flex w-full max-w-sm flex-col gap-4 px-4"
+            >
                 <input
                     type="email"
                     placeholder="E-post"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="bg-gray-200 text-gray-800 placeholder:text-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    className="border border-gray-300 bg-gray-200 px-3 py-2 text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+
                 <input
                     type="password"
                     placeholder="Passord"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="bg-gray-200 text-gray-800 placeholder:text-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                    className="border border-gray-300 bg-gray-200 px-3 py-2 text-gray-800 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+
+                {error && (
+                    <p className="text-sm text-red-600">{error}</p>
+                )}
+
                 <button
                     type="submit"
-                    className="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={loading}
+                    className="rounded-md bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Logg inn
+                    {loading ? "Logger inn..." : "Logg inn"}
                 </button>
             </form>
         </div>
