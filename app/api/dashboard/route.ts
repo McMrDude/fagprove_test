@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       usersResult,
       attendanceResult,
     ] = await Promise.all([
-      supabase.from("courses").select("id, name, teacher_id"),
+      supabase.from("courses").select("*"),
       supabase.from("course_offerings").select("id, course_id, created_at"),
       supabase
         .from("course_sessions")
