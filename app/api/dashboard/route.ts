@@ -219,10 +219,7 @@ export async function GET(request: NextRequest) {
     const completedCourseReport = courses.map((course) => {
       const courseOfferingIds = new Set(
         offerings
-          .filter(
-            (offering) =>
-              String(offering.course_id) === String(course.id)
-          )
+          .filter((offering) => String(offering.course_id) === String(course.id))
           .map((offering) => String(offering.id))
       );
 
