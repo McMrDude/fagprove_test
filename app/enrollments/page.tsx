@@ -185,7 +185,7 @@ export default function EnrollmentReportPage() {
     <main className="min-h-screen bg-[#f7f8fc] px-4 py-8 text-slate-900 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-7xl">
         <Link
-          href="/admin"
+          href="/"
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-violet-700"
         >
           <span aria-hidden="true">←</span>
