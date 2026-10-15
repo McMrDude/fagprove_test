@@ -490,18 +490,24 @@ export default function TeacherDashboardPage() {
                                 </Link>
 
                                 <Link
-                                    href="/teachers/attendance"
-                                    className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-amber-200 hover:shadow-lg"
+                                    href="/teachers/attendance-report"
+                                    className="group rounded-3xl border border-slate-200/70 bg-white p-6 transition hover:-translate-y-1 hover:border-violet-200 hover:shadow-lg"
                                 >
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-2xl">
-                                        ◷
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50 text-2xl">
+                                            📊
+                                        </div>
+                                        <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-violet-600">
+                                            →
+                                        </span>
                                     </div>
+
                                     <h3 className="mt-5 text-lg font-bold">
-                                        Fraværsoppfølging
+                                        Oppmøterapport
                                     </h3>
+
                                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                                        Gå til oppmøtesiden for å følge opp
-                                        deltakernes fravær.
+                                        Søk etter deltakere og se oppmøte og fravær for alle kursøktene.
                                     </p>
                                 </Link>
 
