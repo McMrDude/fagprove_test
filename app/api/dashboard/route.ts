@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         .select("id, course_id, session_number, session_date, offering_id"),
       supabase
         .from("course_participants")
-        .select("id, course_id, participant_id, created_at, offering_id"),
+        .select("id, course_id, participant_id, created_at, offering_id, completion_status"),
       supabase.from("participants").select("id, name, phone_number"),
       supabase.from("users").select("id, name, email, role"),
       supabase
@@ -203,6 +203,47 @@ export async function GET(request: NextRequest) {
     const completedOfferings = offeringStats.filter(
       (item) => item.status === "completed"
     );
+
+    
+    // Count confirmed course completions.
+    const completedEnrollments = enrollments.filter(
+      (enrollment) => enrollment.completion_status === "completed"
+    );
+
+    const completedParticipantIds = new Set(
+      completedEnrollments.map((enrollment) =>
+        String(enrollment.participant_id)
+      )
+    );
+
+    const completedCourseReport = courses.map((course) => {
+      const courseOfferingIds = new Set(
+        offerings
+          .filter(
+            (offering) =>
+              String(offering.course_id) === String(course.id)
+          )
+          .map((offering) => String(offering.id))
+      );
+
+      const count = completedEnrollments.filter(
+        (enrollment) =>
+          enrollment.offering_id !== null &&
+          courseOfferingIds.has(String(enrollment.offering_id))
+      ).length;
+
+      return {
+        course_id: course.id,
+        course_name: course.name,
+        completed_enrollments: count,
+      };
+    });
+
+    const completionReport = {
+      totalCompletedEnrollments: completedEnrollments.length,
+      uniqueParticipants: completedParticipantIds.size,
+      byCourse: completedCourseReport,
+    };
 
     
     // Build participant reports for planned and active courses.
@@ -414,6 +455,7 @@ export async function GET(request: NextRequest) {
         last_date: dates.lastDate,
         session_count: dates.sessionCount,
         status,
+        completionReport,
       })),
     });
   } catch (error) {

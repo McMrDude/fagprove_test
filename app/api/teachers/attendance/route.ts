@@ -315,5 +315,143 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  
+  // Recalculate completion after saving attendance.
+  const offeringId = session.offering_id;
+
+  const [
+    { data: offeringSessions, error: sessionsError },
+    { data: enrollmentDetails, error: enrollmentDetailsError },
+  ] = await Promise.all([
+    supabase
+      .from("course_sessions")
+      .select("id, session_date")
+      .eq("offering_id", offeringId)
+      .order("session_number", { ascending: true }),
+
+    supabase
+      .from("course_participants")
+      .select("id, completion_status")
+      .eq("offering_id", offeringId)
+      .eq("participant_id", participantId)
+      .single(),
+  ]);
+
+  if (sessionsError || enrollmentDetailsError || !enrollmentDetails) {
+    return NextResponse.json(
+      {
+        error:
+          sessionsError?.message ??
+          enrollmentDetailsError?.message ??
+          "Kunne ikke hente påmeldingen.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const courseSessions = offeringSessions ?? [];
+
+  // Only assess a course with five sessions, all of which have passed.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  const allSessionsHavePassed =
+    courseSessions.length === 5 &&
+    courseSessions.every(
+      (courseSession) =>
+        courseSession.session_date &&
+        courseSession.session_date < today
+    );
+
+  if (allSessionsHavePassed) {
+    const { data: participantAttendance, error: participantAttendanceError } =
+      await supabase
+        .from("attendance")
+        .select("session_id, present")
+        .eq("participant_id", participantId)
+        .in(
+          "session_id",
+          courseSessions.map((courseSession) => courseSession.id)
+        );
+
+    if (participantAttendanceError) {
+      return NextResponse.json(
+        { error: participantAttendanceError.message },
+        { status: 500 }
+      );
+    }
+
+    const records = participantAttendance ?? [];
+
+    // Every session must have an explicitly recorded attendance result.
+    const attendanceIsComplete =
+      records.length === 5 &&
+      courseSessions.every((courseSession) =>
+        records.some(
+          (record) =>
+            String(record.session_id) === String(courseSession.id) &&
+            typeof record.present === "boolean"
+        )
+      );
+
+    if (attendanceIsComplete) {
+      const absences = records.filter(
+        (record) => record.present === false
+      ).length;
+
+      const currentStatus = enrollmentDetails.completion_status;
+
+      // Preserve an existing manual decision.
+      const isManuallyDecided =
+        currentStatus === "completed" ||
+        currentStatus === "not_completed";
+
+      if (!isManuallyDecided) {
+        const nextStatus =
+          absences <= 1 ? "completed" : "pending_review";
+
+        const { error: completionError } = await supabase
+          .from("course_participants")
+          .update({
+            completion_status: nextStatus,
+            completion_reviewed_at: null,
+            completion_reviewed_by: null,
+          })
+          .eq("id", enrollmentDetails.id);
+
+        if (completionError) {
+          return NextResponse.json(
+            { error: completionError.message },
+            { status: 500 }
+          );
+        }
+      }
+    }
+  } else if (
+    enrollmentDetails.completion_status === "completed" ||
+    enrollmentDetails.completion_status === "pending_review"
+  ) {
+    // A course that is not yet finished cannot remain automatically assessed.
+    const { error: resetError } = await supabase
+      .from("course_participants")
+      .update({
+        completion_status: "enrolled",
+        completion_reviewed_at: null,
+        completion_reviewed_by: null,
+      })
+      .eq("id", enrollmentDetails.id);
+
+    if (resetError) {
+      return NextResponse.json(
+        { error: resetError.message },
+        { status: 500 }
+      );
+    }
+  }
+
   return NextResponse.json({ success: true });
 }

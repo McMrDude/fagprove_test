@@ -110,6 +110,17 @@ type ParticipantReportRow = {
   offering_id: number;
 };
 
+
+type CompletionReport = {
+  totalCompletedEnrollments: number;
+  uniqueParticipants: number;
+  byCourse: {
+    course_id: number;
+    course_name: string;
+    completed_enrollments: number;
+  }[];
+};
+
 type DashboardData = {
 
   success: boolean;
@@ -134,6 +145,8 @@ type DashboardData = {
     planned: ParticipantReportRow[];
     active: ParticipantReportRow[];
   };
+  
+  completionReport: CompletionReport;
 
   attention: {
 
@@ -1591,6 +1604,129 @@ export default function DashboardPage() {
                 emptyDescription="Deltakere på kurs som pågår vises her."
                 accent="emerald"
               />
+            </section>
+            
+            {/* Course completion report */}
+            <section className="mb-8">
+              <div className="mb-5 flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <ClipboardCheck size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900">
+                    Fullførte kurs
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Oversikt over deltakere som har fullført kursene sine.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-500">
+                        Fullførte kursdeltakelser
+                      </p>
+                      <p className="mt-3 text-3xl font-black text-slate-900">
+                        {loading
+                          ? "—"
+                          : dashboard?.completionReport?.totalCompletedEnrollments ?? 0}
+                      </p>
+                    </div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <Check size={22} />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                    Totalt antall påmeldinger der deltakeren har fullført kurset.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-500">
+                        Unike deltakere
+                      </p>
+                      <p className="mt-3 text-3xl font-black text-slate-900">
+                        {loading
+                          ? "—"
+                          : dashboard?.completionReport?.uniqueParticipants ?? 0}
+                      </p>
+                    </div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                      <Users size={22} />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                    Antall forskjellige personer som har fullført minst ett kurs.
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+                <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+                  <h3 className="font-extrabold text-slate-900">
+                    Fullføring per fag
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Antall fullførte kursdeltakelser i hvert fag.
+                  </p>
+                </div>
+
+                <div className="p-5 sm:p-6">
+                  {loading ? (
+                    <LoadingRows />
+                  ) : dashboard?.completionReport?.byCourse?.length ? (
+                    <div className="space-y-5">
+                      {dashboard.completionReport.byCourse.map((course) => {
+                        const total =
+                          dashboard.completionReport.totalCompletedEnrollments;
+                        const percentage =
+                          total > 0
+                            ? Math.min(
+                                (course.completed_enrollments / total) * 100,
+                                100
+                              )
+                            : 0;
+
+                        return (
+                          <div key={course.course_id}>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <BookOpen
+                                  size={16}
+                                  className="shrink-0 text-indigo-500"
+                                />
+                                <span className="truncate text-sm font-semibold text-slate-700">
+                                  {course.course_name}
+                                </span>
+                              </div>
+                              <span className="shrink-0 text-sm font-extrabold text-slate-900">
+                                {course.completed_enrollments}
+                              </span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={BookOpen}
+                      title="Ingen fag registrert"
+                      description="Fagene vil vises her når de er registrert i systemet."
+                    />
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* Attention */}
