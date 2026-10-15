@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Course = {
   id: number;
@@ -33,12 +32,61 @@ type Participant = {
   phone_number: string;
   present: boolean | null;
   completion_status: CompletionStatus;
+  completion_reviewed_at: string | null;
 };
 
+type Overview = {
+  course: Course;
+  offerings: Offering[];
+  sessions: Session[];
+};
+
+async function readResponse(response: Response) {
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Noe gikk galt.");
+  }
+
+  return data;
+}
+
+function formatDate(date: string) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("nb-NO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function completionLabel(status: CompletionStatus) {
+  switch (status) {
+    case "completed":
+      return "Bestått";
+    case "not_completed":
+      return "Ikke bestått";
+    case "pending_review":
+      return "Trenger vurdering";
+    default:
+      return "Under gjennomføring";
+  }
+}
+
+function completionStyle(status: CompletionStatus) {
+  switch (status) {
+    case "completed":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+    case "not_completed":
+      return "border-red-500/30 bg-red-500/10 text-red-300";
+    case "pending_review":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+    default:
+      return "border-slate-700 bg-slate-800/70 text-slate-400";
+  }
+}
+
 export default function TeacherAttendancePage() {
-  const [course, setCourse] = useState<Course | null>(null);
-  const [offerings, setOfferings] = useState<Offering[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
@@ -46,40 +94,39 @@ export default function TeacherAttendancePage() {
 
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
-  const [savingParticipantId, setSavingParticipantId] =
-    useState<number | null>(null);
-  const [reviewingParticipantId, setReviewingParticipantId] =
-    useState<number | null>(null);
+
+  const [savingParticipantId, setSavingParticipantId] = useState<number | null>(
+    null
+  );
+  const [reviewingParticipantId, setReviewingParticipantId] = useState<
+    number | null
+  >(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load the teacher's subject, course rounds and sessions.
+  // Load the teacher's assigned course, course rounds and sessions.
   useEffect(() => {
     async function loadOverview() {
+      setLoadingOverview(true);
+      setError("");
+
       try {
-        setLoadingOverview(true);
-        setError("");
-
         const response = await fetch("/api/teachers/attendance");
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error || "Kunne ikke hente kursinformasjon."
-          );
-        }
+        const data = await readResponse(response);
 
         const availableOfferings: Offering[] = data.offerings ?? [];
         const availableSessions: Session[] = data.sessions ?? [];
 
-        setCourse(data.course ?? null);
-        setOfferings(availableOfferings);
-        setSessions(availableSessions);
+        setOverview({
+          course: data.course,
+          offerings: availableOfferings,
+          sessions: availableSessions,
+        });
 
-        if (availableOfferings.length > 0) {
-          const firstOffering = availableOfferings[0];
+        const firstOffering = availableOfferings[0];
 
+        if (firstOffering) {
           setSelectedOfferingId(String(firstOffering.id));
 
           const firstSession = availableSessions.find(
@@ -89,32 +136,52 @@ export default function TeacherAttendancePage() {
           setSelectedSessionId(
             firstSession ? String(firstSession.id) : ""
           );
+        } else {
+          setSelectedOfferingId("");
+          setSelectedSessionId("");
         }
       } catch (err) {
         setError(
           err instanceof Error
             ? err.message
-            : "Noe gikk galt under lasting."
+            : "Kunne ikke hente kursinformasjon."
         );
       } finally {
         setLoadingOverview(false);
       }
     }
 
-    loadOverview();
+    void loadOverview();
   }, []);
 
-  // Reload participants when the selected session changes.
+  const course = overview?.course ?? null;
+  const offerings = overview?.offerings ?? [];
+  const sessions = overview?.sessions ?? [];
+
+  const offeringSessions = useMemo(
+    () =>
+      sessions.filter(
+        (session) =>
+          String(session.offering_id) === selectedOfferingId
+      ),
+    [sessions, selectedOfferingId]
+  );
+
+  const selectedSession = offeringSessions.find(
+    (session) => String(session.id) === selectedSessionId
+  );
+
+  // Load participants and attendance for the selected session.
   const loadParticipants = useCallback(async () => {
     if (!selectedOfferingId || !selectedSessionId) {
       setParticipants([]);
       return;
     }
 
-    try {
-      setLoadingParticipants(true);
-      setError("");
+    setLoadingParticipants(true);
+    setError("");
 
+    try {
       const params = new URLSearchParams({
         offering_id: selectedOfferingId,
         session_id: selectedSessionId,
@@ -124,13 +191,7 @@ export default function TeacherAttendancePage() {
         `/api/teachers/attendance?${params.toString()}`
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Kunne ikke hente deltakerne."
-        );
-      }
+      const data = await readResponse(response);
 
       setParticipants(data.participants ?? []);
     } catch (err) {
@@ -146,16 +207,8 @@ export default function TeacherAttendancePage() {
   }, [selectedOfferingId, selectedSessionId]);
 
   useEffect(() => {
-    loadParticipants();
+    void loadParticipants();
   }, [loadParticipants]);
-
-  const selectedSession = sessions.find(
-    (session) => session.id === Number(selectedSessionId)
-  );
-
-  const offeringSessions = sessions.filter(
-    (session) => session.offering_id === Number(selectedOfferingId)
-  );
 
   const presentCount = participants.filter(
     (participant) => participant.present === true
@@ -181,37 +234,30 @@ export default function TeacherAttendancePage() {
     (participant) => participant.completion_status === "not_completed"
   ).length;
 
-  function formatDate(date: string) {
-    return new Date(`${date}T12:00:00`).toLocaleDateString("nb-NO", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  }
-
   function handleOfferingChange(offeringId: string) {
     setSelectedOfferingId(offeringId);
 
     const firstSession = sessions.find(
-      (session) => session.offering_id === Number(offeringId)
+      (session) => String(session.offering_id) === offeringId
     );
 
-    setSelectedSessionId(
-      firstSession ? String(firstSession.id) : ""
-    );
+    setSelectedSessionId(firstSession ? String(firstSession.id) : "");
+    setSuccess("");
+    setError("");
   }
 
+  // Save attendance for one participant and session.
   async function saveAttendance(
     participantId: number,
     present: boolean
   ) {
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || savingParticipantId !== null) return;
+
+    setSavingParticipantId(participantId);
+    setError("");
+    setSuccess("");
 
     try {
-      setSavingParticipantId(participantId);
-      setError("");
-      setSuccess("");
-
       const response = await fetch("/api/teachers/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,21 +268,11 @@ export default function TeacherAttendancePage() {
         }),
       });
 
-      const data = await response.json();
+      await readResponse(response);
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Kunne ikke lagre oppmøtet."
-        );
-      }
-
-      setParticipants((current) =>
-        current.map((participant) =>
-          participant.id === participantId
-            ? { ...participant, present }
-            : participant
-        )
-      );
+      // Refresh from the database so the displayed completion status
+      // reflects the API's automatic recalculation as well.
+      await loadParticipants();
 
       setSuccess("Oppmøtet er lagret.");
     } catch (err) {
@@ -250,18 +286,21 @@ export default function TeacherAttendancePage() {
     }
   }
 
-  // Submit the teacher's final pass/fail decision.
+  // Save the teacher's final pass/fail decision.
   async function reviewCompletion(
     participantId: number,
     status: "completed" | "not_completed"
   ) {
-    if (!selectedOfferingId) return;
+    if (!selectedOfferingId || reviewingParticipantId !== null) return;
 
     const participant = participants.find(
       (item) => item.id === participantId
     );
 
-    if (!participant || participant.completion_status !== "pending_review") {
+    if (
+      !participant ||
+      participant.completion_status !== "pending_review"
+    ) {
       setError("Denne deltakeren er ikke klar for sluttvurdering.");
       return;
     }
@@ -270,17 +309,17 @@ export default function TeacherAttendancePage() {
 
     if (
       !window.confirm(
-        `Vil du markere ${participant.name} som ${decision}?`
+        `Vil du registrere ${participant.name} som ${decision}?`
       )
     ) {
       return;
     }
 
-    try {
-      setReviewingParticipantId(participantId);
-      setError("");
-      setSuccess("");
+    setReviewingParticipantId(participantId);
+    setError("");
+    setSuccess("");
 
+    try {
       const response = await fetch("/api/teachers/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -292,25 +331,21 @@ export default function TeacherAttendancePage() {
         }),
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.error || "Kunne ikke lagre sluttvurderingen."
-        );
-      }
+      const data = await readResponse(response);
 
       setParticipants((current) =>
         current.map((item) =>
           item.id === participantId
-            ? { ...item, completion_status: status }
+            ? {
+                ...item,
+                completion_status: data.completion_status as CompletionStatus,
+                completion_reviewed_at: new Date().toISOString(),
+              }
             : item
         )
       );
 
-      setSuccess(
-        `${participant.name} er registrert som ${decision}.`
-      );
+      setSuccess(`${participant.name} er registrert som ${decision}.`);
     } catch (err) {
       setError(
         err instanceof Error
@@ -319,32 +354,6 @@ export default function TeacherAttendancePage() {
       );
     } finally {
       setReviewingParticipantId(null);
-    }
-  }
-
-  function completionLabel(status: CompletionStatus) {
-    switch (status) {
-      case "completed":
-        return "Bestått";
-      case "not_completed":
-        return "Ikke bestått";
-      case "pending_review":
-        return "Venter på vurdering";
-      default:
-        return "Under gjennomføring";
-    }
-  }
-
-  function completionStyle(status: CompletionStatus) {
-    switch (status) {
-      case "completed":
-        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-      case "not_completed":
-        return "border-red-500/30 bg-red-500/10 text-red-300";
-      case "pending_review":
-        return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-      default:
-        return "border-slate-700 bg-slate-800/70 text-slate-400";
     }
   }
 
@@ -372,11 +381,10 @@ export default function TeacherAttendancePage() {
           <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
             <div>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Kursoppfølging
-                <span className="text-teal-400">.</span>
+                Kursoppfølging<span className="text-teal-400">.</span>
               </h1>
               <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400 sm:text-base">
-                Registrer oppmøte for hver undervisningsdag, og følg opp
+                Registrer oppmøte for hver undervisningsdag, og følg
                 deltakernes endelige kursresultat.
               </p>
             </div>
@@ -386,9 +394,7 @@ export default function TeacherAttendancePage() {
                 <p className="text-xs font-medium uppercase tracking-wider text-teal-300">
                   Ditt fag
                 </p>
-                <p className="mt-1 font-semibold text-white">
-                  {course.name}
-                </p>
+                <p className="mt-1 font-semibold text-white">{course.name}</p>
               </div>
             )}
           </div>
@@ -428,18 +434,12 @@ export default function TeacherAttendancePage() {
             <p className="mt-2 text-sm text-slate-400">
               En kursplan må opprettes før du kan registrere oppmøte.
             </p>
-            <a
-              href="/course-planning"
-              className="mt-5 inline-flex rounded-xl bg-teal-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-teal-300"
-            >
-              Gå til kursplanlegging →
-            </a>
           </section>
         )}
 
         {course && offerings.length > 0 && (
           <>
-            {/* Course round and session selection */}
+            {/* Course and session selectors */}
             <section className="mb-6 rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl shadow-black/10 sm:p-6">
               <div className="mb-5">
                 <h2 className="text-lg font-semibold">
@@ -484,15 +484,18 @@ export default function TeacherAttendancePage() {
                   <select
                     id="session"
                     value={selectedSessionId}
-                    onChange={(event) =>
-                      setSelectedSessionId(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setSelectedSessionId(event.target.value);
+                      setSuccess("");
+                      setError("");
+                    }}
                     disabled={offeringSessions.length === 0}
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20 disabled:opacity-50"
                   >
                     {offeringSessions.length === 0 && (
                       <option value="">Ingen undervisningsdager</option>
                     )}
+
                     {offeringSessions.map((session) => (
                       <option key={session.id} value={session.id}>
                         Økt {session.session_number} ·{" "}
@@ -643,7 +646,7 @@ export default function TeacherAttendancePage() {
 
                           <button
                             type="button"
-                            disabled={isSaving}
+                            disabled={savingParticipantId !== null}
                             onClick={() =>
                               saveAttendance(participant.id, true)
                             }
@@ -658,7 +661,7 @@ export default function TeacherAttendancePage() {
 
                           <button
                             type="button"
-                            disabled={isSaving}
+                            disabled={savingParticipantId !== null}
                             onClick={() =>
                               saveAttendance(participant.id, false)
                             }
@@ -691,9 +694,7 @@ export default function TeacherAttendancePage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-400">
                   Kursresultater
                 </p>
-                <h2 className="mt-2 text-xl font-bold">
-                  Sluttvurdering
-                </h2>
+                <h2 className="mt-2 text-xl font-bold">Sluttvurdering</h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                   Her ser du hvem som har bestått, hvem som ikke har bestått,
                   og hvem som trenger en endelig vurdering fra deg.
@@ -702,14 +703,20 @@ export default function TeacherAttendancePage() {
                 <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3">
                     <p className="text-xs text-emerald-300">Bestått</p>
-                    <p className="mt-1 text-2xl font-bold">{completedCount}</p>
+                    <p className="mt-1 text-2xl font-bold">
+                      {completedCount}
+                    </p>
                   </div>
+
                   <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-3">
                     <p className="text-xs text-red-300">Ikke bestått</p>
                     <p className="mt-1 text-2xl font-bold">{failedCount}</p>
                   </div>
+
                   <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-3">
-                    <p className="text-xs text-amber-300">Trenger vurdering</p>
+                    <p className="text-xs text-amber-300">
+                      Trenger vurdering
+                    </p>
                     <p className="mt-1 text-2xl font-bold">{pendingCount}</p>
                   </div>
                 </div>
@@ -742,7 +749,9 @@ export default function TeacherAttendancePage() {
                                 participant.completion_status
                               )}`}
                             >
-                              {completionLabel(participant.completion_status)}
+                              {completionLabel(
+                                participant.completion_status
+                              )}
                             </span>
                           </div>
                         </div>
@@ -751,17 +760,21 @@ export default function TeacherAttendancePage() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              disabled={isReviewing}
+                              disabled={reviewingParticipantId !== null}
                               onClick={() =>
-                                reviewCompletion(participant.id, "completed")
+                                reviewCompletion(
+                                  participant.id,
+                                  "completed"
+                                )
                               }
                               className="rounded-xl bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-wait disabled:opacity-50"
                             >
                               {isReviewing ? "Lagrer..." : "✓ Bestått"}
                             </button>
+
                             <button
                               type="button"
-                              disabled={isReviewing}
+                              disabled={reviewingParticipantId !== null}
                               onClick={() =>
                                 reviewCompletion(
                                   participant.id,
@@ -779,7 +792,10 @@ export default function TeacherAttendancePage() {
                           <p className="max-w-xs text-sm leading-5 text-slate-500 sm:text-right">
                             {participant.completion_status === "enrolled"
                               ? "Venter på at kurset fullføres."
-                              : "Sluttresultatet er registrert."}
+                              : participant.completion_status === "completed" &&
+                                  !participant.completion_reviewed_at
+                                ? "Bestått automatisk basert på registrert oppmøte."
+                                : "Sluttresultatet er registrert."}
                           </p>
                         )}
                       </div>

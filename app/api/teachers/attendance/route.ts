@@ -3,6 +3,12 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { supabase } from "../../supabaseClient";
 
+type CompletionStatus =
+  | "enrolled"
+  | "pending_review"
+  | "completed"
+  | "not_completed";
+
 async function getTeacherId() {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
@@ -18,7 +24,11 @@ async function getTeacherId() {
 
     if (payload.role !== "teacher" || !payload.id) return null;
 
-    return Number(payload.id);
+    const teacherId = Number(payload.id);
+
+    return Number.isFinite(teacherId) && teacherId > 0
+      ? teacherId
+      : null;
   } catch {
     return null;
   }
@@ -36,7 +46,22 @@ async function getTeacherCourse(teacherId: number) {
   return data;
 }
 
-// GET: Load course offerings, sessions and participants
+function getOsloDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Oslo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+// GET: Load course offerings, sessions and participants.
 export async function GET(request: NextRequest) {
   const teacherId = await getTeacherId();
 
@@ -69,9 +94,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const offeringIds = (offerings ?? []).map((o) => o.id);
+  const offeringIds = (offerings ?? []).map((offering) => offering.id);
 
-  let sessions: any[] = [];
+  let sessions: {
+    id: number;
+    offering_id: number;
+    session_number: number;
+    session_date: string;
+  }[] = [];
 
   if (offeringIds.length > 0) {
     const { data, error } = await supabase
@@ -94,13 +124,14 @@ export async function GET(request: NextRequest) {
   const offeringId = Number(params.get("offering_id"));
   const sessionId = Number(params.get("session_id"));
 
-  // No session selected yet: return the available offerings and dates.
+  // No session selected: return the available offerings and sessions.
   if (!offeringId || !sessionId) {
     return NextResponse.json({ course, offerings, sessions });
   }
 
-  // Verify that the selected offering belongs to this teacher.
-  const offering = (offerings ?? []).find((o) => o.id === offeringId);
+  const offering = (offerings ?? []).find(
+    (item) => Number(item.id) === offeringId
+  );
 
   if (!offering) {
     return NextResponse.json(
@@ -109,9 +140,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Verify that the selected session belongs to that offering.
   const session = sessions.find(
-    (s) => s.id === sessionId && s.offering_id === offeringId
+    (item) =>
+      Number(item.id) === sessionId &&
+      Number(item.offering_id) === offeringId
   );
 
   if (!session) {
@@ -123,7 +155,9 @@ export async function GET(request: NextRequest) {
 
   const { data: enrollments, error: enrollmentError } = await supabase
     .from("course_participants")
-    .select("participant_id")
+    .select(
+      "id, participant_id, completion_status, completion_reviewed_at"
+    )
     .eq("offering_id", offeringId);
 
   if (enrollmentError) {
@@ -134,10 +168,14 @@ export async function GET(request: NextRequest) {
   }
 
   const participantIds = [
-    ...new Set((enrollments ?? []).map((e) => e.participant_id)),
+    ...new Set((enrollments ?? []).map((item) => item.participant_id)),
   ];
 
-  let participants: any[] = [];
+  let participants: {
+    id: number;
+    name: string;
+    phone_number: string;
+  }[] = [];
 
   if (participantIds.length > 0) {
     const { data, error } = await supabase
@@ -168,13 +206,22 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Only return attendance for participants enrolled in this offering.
   const enrolledIds = new Set(participantIds);
 
   const attendanceByParticipant = Object.fromEntries(
     (attendance ?? [])
-      .filter((a) => enrolledIds.has(a.participant_id))
-      .map((a) => [a.participant_id, a.present])
+      .filter((item) => enrolledIds.has(item.participant_id))
+      .map((item) => [item.participant_id, item.present])
+  );
+
+  const enrollmentByParticipant = Object.fromEntries(
+    (enrollments ?? []).map((item) => [
+      item.participant_id,
+      {
+        completion_status: item.completion_status,
+        completion_reviewed_at: item.completion_reviewed_at,
+      },
+    ])
   );
 
   return NextResponse.json({
@@ -182,14 +229,20 @@ export async function GET(request: NextRequest) {
     offerings,
     sessions,
     selectedSession: session,
-    participants: participants.map((p) => ({
-      ...p,
-      present: attendanceByParticipant[p.id] ?? null,
+    participants: participants.map((participant) => ({
+      ...participant,
+      present: attendanceByParticipant[participant.id] ?? null,
+      completion_status:
+        enrollmentByParticipant[participant.id]?.completion_status ??
+        "enrolled",
+      completion_reviewed_at:
+        enrollmentByParticipant[participant.id]?.completion_reviewed_at ??
+        null,
     })),
   });
 }
 
-// POST: Save attendance for one participant and session
+// POST: Save attendance or a teacher's final pass/fail decision.
 export async function POST(request: NextRequest) {
   const teacherId = await getTeacherId();
 
@@ -209,15 +262,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  
-  const body = await request.json();
+  let body: Record<string, unknown>;
 
-  // Handle a teacher's final pass/fail decision separately
-  // from ordinary attendance updates.
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Ugyldig forespørsel." },
+      { status: 400 }
+    );
+  }
+
+  // Handle a teacher's final pass/fail decision.
   if (body.action === "review_completion") {
     const participantId = Number(body.participant_id);
     const offeringId = Number(body.offering_id);
-    const status = body.status;
+    const status = body.status as CompletionStatus;
 
     if (
       !Number.isInteger(participantId) ||
@@ -232,7 +292,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify that this course offering belongs to the teacher's subject.
+    // Confirm the offering belongs to the teacher's subject.
     const { data: offering, error: offeringError } = await supabase
       .from("course_offerings")
       .select("id, course_id")
@@ -254,7 +314,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load the five sessions for this course offering.
     const { data: courseSessions, error: sessionsError } = await supabase
       .from("course_sessions")
       .select("id, session_date")
@@ -268,17 +327,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Europe/Oslo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const sessions = courseSessions ?? [];
+    const today = getOsloDate();
 
     const allSessionsHavePassed =
-      courseSessions?.length === 5 &&
-      courseSessions.every(
-        (session) => session.session_date && session.session_date < today
+      sessions.length === 5 &&
+      sessions.every(
+        (item) => item.session_date && item.session_date < today
       );
 
     if (!allSessionsHavePassed) {
@@ -291,7 +346,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the participant's enrollment in this exact offering.
     const { data: enrollment, error: enrollmentError } = await supabase
       .from("course_participants")
       .select("id, completion_status")
@@ -323,15 +377,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Make sure attendance has been recorded for all five sessions.
-    const { data: attendanceRecords, error: attendanceError } = await supabase
-      .from("attendance")
-      .select("session_id, present")
-      .eq("participant_id", participantId)
-      .in(
-        "session_id",
-        (courseSessions ?? []).map((session) => session.id)
-      );
+    // Check that attendance has been explicitly recorded for all five sessions.
+    const { data: attendanceRecords, error: attendanceError } =
+      await supabase
+        .from("attendance")
+        .select("session_id, present")
+        .eq("participant_id", participantId)
+        .in(
+          "session_id",
+          sessions.map((item) => item.id)
+        );
 
     if (attendanceError) {
       return NextResponse.json(
@@ -344,10 +399,10 @@ export async function POST(request: NextRequest) {
 
     const attendanceIsComplete =
       records.length === 5 &&
-      (courseSessions ?? []).every((session) =>
+      sessions.every((courseSession) =>
         records.some(
           (record) =>
-            String(record.session_id) === String(session.id) &&
+            String(record.session_id) === String(courseSession.id) &&
             typeof record.present === "boolean"
         )
       );
@@ -362,8 +417,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save the teacher's decision and who made it.
-    const { error: updateError } = await supabase
+    // Save the decision and the teacher who made it.
+    const { data: updatedEnrollment, error: updateError } = await supabase
       .from("course_participants")
       .update({
         completion_status: status,
@@ -371,12 +426,24 @@ export async function POST(request: NextRequest) {
         completion_reviewed_by: teacherId,
       })
       .eq("id", enrollment.id)
-      .eq("completion_status", "pending_review");
+      .eq("completion_status", "pending_review")
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       return NextResponse.json(
         { error: updateError.message },
         { status: 500 }
+      );
+    }
+
+    if (!updatedEnrollment) {
+      return NextResponse.json(
+        {
+          error:
+            "Resultatet ble endret et annet sted. Oppdater siden og prøv igjen.",
+        },
+        { status: 409 }
       );
     }
 
@@ -386,10 +453,10 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Otherwise, process a normal attendance update.
   const sessionId = Number(body.session_id);
   const participantId = Number(body.participant_id);
   const present = body.present;
-
 
   if (
     !Number.isInteger(sessionId) ||
@@ -404,7 +471,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Confirm the session belongs to the teacher's course.
   const { data: session, error: sessionError } = await supabase
     .from("course_sessions")
     .select("id, offering_id, course_id")
@@ -426,7 +492,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Confirm the participant is enrolled in this exact offering.
   const { data: enrollment, error: enrollmentError } = await supabase
     .from("course_participants")
     .select("id")
@@ -448,7 +513,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Update an existing record, or create one if it doesn't exist.
+  // Update the attendance record if one exists; otherwise insert it.
   const { data: existing, error: existingError } = await supabase
     .from("attendance")
     .select("id")
@@ -468,19 +533,20 @@ export async function POST(request: NextRequest) {
   if (existing) {
     const result = await supabase
       .from("attendance")
-      .update({ present, marked_at: new Date().toISOString() })
+      .update({
+        present,
+        marked_at: new Date().toISOString(),
+      })
       .eq("id", existing.id);
 
     saveError = result.error;
   } else {
-    const result = await supabase
-      .from("attendance")
-      .insert({
-        session_id: sessionId,
-        participant_id: participantId,
-        present,
-        marked_at: new Date().toISOString(),
-      });
+    const result = await supabase.from("attendance").insert({
+      session_id: sessionId,
+      participant_id: participantId,
+      present,
+      marked_at: new Date().toISOString(),
+    });
 
     saveError = result.error;
   }
@@ -492,8 +558,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  
-  // Recalculate completion after saving attendance.
+  // Recalculate the participant's completion status.
   const offeringId = session.offering_id;
 
   const [
@@ -527,21 +592,12 @@ export async function POST(request: NextRequest) {
   }
 
   const courseSessions = offeringSessions ?? [];
-
-  // Only assess a course with five sessions, all of which have passed.
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Oslo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  const today = getOsloDate();
 
   const allSessionsHavePassed =
     courseSessions.length === 5 &&
     courseSessions.every(
-      (courseSession) =>
-        courseSession.session_date &&
-        courseSession.session_date < today
+      (item) => item.session_date && item.session_date < today
     );
 
   if (allSessionsHavePassed) {
@@ -552,7 +608,7 @@ export async function POST(request: NextRequest) {
         .eq("participant_id", participantId)
         .in(
           "session_id",
-          courseSessions.map((courseSession) => courseSession.id)
+          courseSessions.map((item) => item.id)
         );
 
     if (participantAttendanceError) {
@@ -564,7 +620,6 @@ export async function POST(request: NextRequest) {
 
     const records = participantAttendance ?? [];
 
-    // Every session must have an explicitly recorded attendance result.
     const attendanceIsComplete =
       records.length === 5 &&
       courseSessions.every((courseSession) =>
@@ -580,15 +635,16 @@ export async function POST(request: NextRequest) {
         (record) => record.present === false
       ).length;
 
-      const currentStatus = enrollmentDetails.completion_status;
+      const currentStatus =
+        enrollmentDetails.completion_status as CompletionStatus;
 
-      // Preserve an existing manual decision.
+      // Never overwrite a teacher's existing final decision.
       const isManuallyDecided =
         currentStatus === "completed" ||
         currentStatus === "not_completed";
 
       if (!isManuallyDecided) {
-        const nextStatus =
+        const nextStatus: CompletionStatus =
           absences <= 1 ? "completed" : "pending_review";
 
         const { error: completionError } = await supabase
@@ -609,10 +665,9 @@ export async function POST(request: NextRequest) {
       }
     }
   } else if (
-    enrollmentDetails.completion_status === "completed" ||
     enrollmentDetails.completion_status === "pending_review"
   ) {
-    // A course that is not yet finished cannot remain automatically assessed.
+    // A course that is not yet finished cannot remain awaiting final review.
     const { error: resetError } = await supabase
       .from("course_participants")
       .update({
