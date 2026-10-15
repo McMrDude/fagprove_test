@@ -209,10 +209,187 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  
   const body = await request.json();
+
+  // Handle a teacher's final pass/fail decision separately
+  // from ordinary attendance updates.
+  if (body.action === "review_completion") {
+    const participantId = Number(body.participant_id);
+    const offeringId = Number(body.offering_id);
+    const status = body.status;
+
+    if (
+      !Number.isInteger(participantId) ||
+      participantId <= 0 ||
+      !Number.isInteger(offeringId) ||
+      offeringId <= 0 ||
+      !["completed", "not_completed"].includes(status)
+    ) {
+      return NextResponse.json(
+        { error: "Ugyldige data for sluttvurderingen." },
+        { status: 400 }
+      );
+    }
+
+    // Verify that this course offering belongs to the teacher's subject.
+    const { data: offering, error: offeringError } = await supabase
+      .from("course_offerings")
+      .select("id, course_id")
+      .eq("id", offeringId)
+      .eq("course_id", course.id)
+      .maybeSingle();
+
+    if (offeringError) {
+      return NextResponse.json(
+        { error: offeringError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!offering) {
+      return NextResponse.json(
+        { error: "Du har ikke tilgang til denne kursrunden." },
+        { status: 403 }
+      );
+    }
+
+    // Load the five sessions for this course offering.
+    const { data: courseSessions, error: sessionsError } = await supabase
+      .from("course_sessions")
+      .select("id, session_date")
+      .eq("offering_id", offeringId)
+      .order("session_number", { ascending: true });
+
+    if (sessionsError) {
+      return NextResponse.json(
+        { error: sessionsError.message },
+        { status: 500 }
+      );
+    }
+
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Oslo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const allSessionsHavePassed =
+      courseSessions?.length === 5 &&
+      courseSessions.every(
+        (session) => session.session_date && session.session_date < today
+      );
+
+    if (!allSessionsHavePassed) {
+      return NextResponse.json(
+        {
+          error:
+            "Sluttvurdering er først tilgjengelig når alle fem kursøktene er gjennomført.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Verify the participant's enrollment in this exact offering.
+    const { data: enrollment, error: enrollmentError } = await supabase
+      .from("course_participants")
+      .select("id, completion_status")
+      .eq("offering_id", offeringId)
+      .eq("participant_id", participantId)
+      .maybeSingle();
+
+    if (enrollmentError) {
+      return NextResponse.json(
+        { error: enrollmentError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!enrollment) {
+      return NextResponse.json(
+        { error: "Deltakeren er ikke påmeldt denne kursrunden." },
+        { status: 403 }
+      );
+    }
+
+    if (enrollment.completion_status !== "pending_review") {
+      return NextResponse.json(
+        {
+          error:
+            "Deltakeren må være klar for sluttvurdering før du kan registrere bestått eller ikke bestått.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Make sure attendance has been recorded for all five sessions.
+    const { data: attendanceRecords, error: attendanceError } = await supabase
+      .from("attendance")
+      .select("session_id, present")
+      .eq("participant_id", participantId)
+      .in(
+        "session_id",
+        (courseSessions ?? []).map((session) => session.id)
+      );
+
+    if (attendanceError) {
+      return NextResponse.json(
+        { error: attendanceError.message },
+        { status: 500 }
+      );
+    }
+
+    const records = attendanceRecords ?? [];
+
+    const attendanceIsComplete =
+      records.length === 5 &&
+      (courseSessions ?? []).every((session) =>
+        records.some(
+          (record) =>
+            String(record.session_id) === String(session.id) &&
+            typeof record.present === "boolean"
+        )
+      );
+
+    if (!attendanceIsComplete) {
+      return NextResponse.json(
+        {
+          error:
+            "Oppmøte må være registrert for alle fem kursøktene før sluttvurdering.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Save the teacher's decision and who made it.
+    const { error: updateError } = await supabase
+      .from("course_participants")
+      .update({
+        completion_status: status,
+        completion_reviewed_at: new Date().toISOString(),
+        completion_reviewed_by: teacherId,
+      })
+      .eq("id", enrollment.id)
+      .eq("completion_status", "pending_review");
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: updateError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      completion_status: status,
+    });
+  }
+
   const sessionId = Number(body.session_id);
   const participantId = Number(body.participant_id);
   const present = body.present;
+
 
   if (
     !Number.isInteger(sessionId) ||
