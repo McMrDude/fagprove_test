@@ -441,7 +441,7 @@ export default function DashboardPage() {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={() => router.push("/admin/enrollments")}
+                onClick={() => router.push("/enrollments")}
                 className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
               >
                 <Search size={15} />
@@ -615,12 +615,7 @@ export default function DashboardPage() {
                   <QuickAction
                     icon={Search}
                     title="Påmeldingsrapport"
-                    onClick={() => router.push("/admin/enrollments")}
-                  />
-                  <QuickAction
-                    icon={CalendarDays}
-                    title="Planlegg kurs"
-                    onClick={() => router.push("/course-planning")}
+                    onClick={() => router.push("/enrollments")}
                   />
                   <QuickAction
                     icon={GraduationCap}
@@ -638,7 +633,7 @@ export default function DashboardPage() {
               icon={Users}
               action={
                 <button
-                  onClick={() => router.push("/admin/enrollments")}
+                  onClick={() => router.push("/enrollments")}
                   className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
                 >
                   Full rapport →
@@ -688,7 +683,7 @@ export default function DashboardPage() {
                   ))}
                   {participantRows.length > 6 && (
                     <button
-                      onClick={() => router.push("/admin/enrollments")}
+                      onClick={() => router.push("/enrollments")}
                       className="w-full pt-3 text-left text-xs font-bold text-indigo-600 hover:text-indigo-800"
                     >
                       Vis alle {participantRows.length} påmeldinger →
