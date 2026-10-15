@@ -413,6 +413,7 @@ export async function GET(request: NextRequest) {
       }));
 
     return NextResponse.json({
+      completionReport,
       success: true,
       today,
       user: {
@@ -452,7 +453,6 @@ export async function GET(request: NextRequest) {
         last_date: dates.lastDate,
         session_count: dates.sessionCount,
         status,
-        completionReport,
       })),
     });
   } catch (error) {
