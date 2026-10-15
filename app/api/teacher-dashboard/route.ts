@@ -1,7 +1,22 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { supabase } from "../supabaseClient";
+
+function getOsloDate() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Oslo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
+
+const emptyStats = {
+    participants: 0,
+    completedSessions: 0,
+    totalSessions: 0,
+    absences: 0,
+};
 
 export async function GET(request: NextRequest) {
     try {
@@ -35,7 +50,6 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Get the logged-in teacher.
         const { data: teacher, error: teacherError } = await supabase
             .from("users")
             .select("id, name, email")
@@ -52,7 +66,6 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Find the subject assigned to this teacher.
         const { data: course, error: courseError } = await supabase
             .from("courses")
             .select("id, name")
@@ -67,18 +80,14 @@ export async function GET(request: NextRequest) {
                 teacher,
                 course: null,
                 offering: null,
+                courseStatus: null,
                 nextSession: null,
                 sessions: [],
-                stats: {
-                    participants: 0,
-                    completedSessions: 0,
-                    totalSessions: 0,
-                    absences: 0,
-                },
+                participants: [],
+                stats: emptyStats,
             });
         }
 
-        // Get all scheduled offerings for this subject.
         const { data: offerings, error: offeringsError } = await supabase
             .from("course_offerings")
             .select("id, course_id, created_at")
@@ -93,18 +102,14 @@ export async function GET(request: NextRequest) {
                 teacher,
                 course,
                 offering: null,
+                courseStatus: null,
                 nextSession: null,
                 sessions: [],
-                stats: {
-                    participants: 0,
-                    completedSessions: 0,
-                    totalSessions: 0,
-                    absences: 0,
-                },
+                participants: [],
+                stats: emptyStats,
             });
         }
 
-        // Get the sessions belonging to these offerings.
         const offeringIds = offerings.map((item) => item.id);
 
         const { data: allSessions, error: sessionsError } = await supabase
@@ -116,39 +121,113 @@ export async function GET(request: NextRequest) {
         if (sessionsError) throw sessionsError;
 
         const sessions = allSessions ?? [];
+        const today = getOsloDate();
 
-        // Use the Norwegian calendar date for date comparisons.
-        const today = new Intl.DateTimeFormat("en-CA", {
-            timeZone: "Europe/Oslo",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-        }).format(new Date());
+        // Classify each offering using its scheduled session dates.
+        const offeringStates = offerings.map((item) => {
+            const offeringSessions = sessions.filter(
+                (session) => session.offering_id === item.id
+            );
 
-        // Prefer the offering with the next upcoming session.
-        const nextSession =
-            sessions.find((session) => session.session_date >= today) ?? null;
+            const firstDate = offeringSessions[0]?.session_date ?? null;
+            const lastDate =
+                offeringSessions[offeringSessions.length - 1]?.session_date ??
+                null;
 
-        const activeOffering =
-            offerings.find((item) => item.id === nextSession?.offering_id) ??
-            offerings[0];
+            let status: "planned" | "active" | "completed" | "unscheduled";
 
-        const activeSessions = sessions.filter(
-            (session) => session.offering_id === activeOffering.id
-        );
+            if (offeringSessions.length === 0) {
+                status = "unscheduled";
+            } else if (firstDate! > today) {
+                status = "planned";
+            } else if (lastDate! < today) {
+                status = "completed";
+            } else {
+                status = "active";
+            }
 
+            return {
+                offering: item,
+                sessions: offeringSessions,
+                status,
+            };
+        });
+
+        // Prefer an active offering, otherwise the nearest planned one.
+        // Never fall back to an old, completed offering.
+        const selected =
+            offeringStates.find((item) => item.status === "active") ??
+            offeringStates
+                .filter((item) => item.status === "planned")
+                .sort((a, b) => {
+                    const aDate = a.sessions[0]?.session_date ?? "";
+                    const bDate = b.sessions[0]?.session_date ?? "";
+                    return aDate.localeCompare(bDate);
+                })[0] ??
+            null;
+
+        if (!selected) {
+            return NextResponse.json({
+                success: true,
+                teacher,
+                course,
+                offering: null,
+                courseStatus: null,
+                nextSession: null,
+                sessions: [],
+                participants: [],
+                stats: emptyStats,
+                previousOfferings: offeringStates
+                    .filter((item) => item.status === "completed")
+                    .map((item) => ({
+                        id: item.offering.id,
+                        status: item.status,
+                    })),
+            });
+        }
+
+        const activeOffering = selected.offering;
+        const activeSessions = selected.sessions;
         const sessionIds = activeSessions.map((session) => session.id);
 
-        // Get participants registered for this specific offering.
         const { data: enrollments, error: enrollmentsError } =
             await supabase
                 .from("course_participants")
-                .select("participant_id")
+                .select("participant_id, completion_status")
                 .eq("offering_id", activeOffering.id);
 
         if (enrollmentsError) throw enrollmentsError;
 
-        // Get the recorded attendance for this offering.
+        const participantIds = [
+            ...new Set((enrollments ?? []).map((item) => item.participant_id)),
+        ];
+
+        let participants: {
+            id: number;
+            name: string;
+            phone_number: string;
+            completion_status: string | null;
+        }[] = [];
+
+        if (participantIds.length > 0) {
+            const { data: participantRows, error: participantsError } =
+                await supabase
+                    .from("participants")
+                    .select("id, name, phone_number")
+                    .in("id", participantIds)
+                    .order("name", { ascending: true });
+
+            if (participantsError) throw participantsError;
+
+            participants = (participantRows ?? []).map((participant) => ({
+                ...participant,
+                completion_status:
+                    enrollments?.find(
+                        (item) => item.participant_id === participant.id
+                    )?.completion_status ?? null,
+            }));
+        }
+
         let absences = 0;
 
         if (sessionIds.length > 0) {
@@ -165,21 +244,34 @@ export async function GET(request: NextRequest) {
             ).length;
         }
 
+        const nextSession =
+            activeSessions.find(
+                (session) => session.session_date >= today
+            ) ?? null;
+
         return NextResponse.json({
             success: true,
             teacher,
             course,
             offering: activeOffering,
+            courseStatus: selected.status,
             nextSession,
             sessions: activeSessions,
+            participants,
             stats: {
-                participants: enrollments?.length ?? 0,
+                participants: participants.length,
                 completedSessions: activeSessions.filter(
                     (session) => session.session_date < today
                 ).length,
                 totalSessions: activeSessions.length,
                 absences,
             },
+            previousOfferings: offeringStates
+                .filter((item) => item.status === "completed")
+                .map((item) => ({
+                    id: item.offering.id,
+                    status: item.status,
+                })),
         });
     } catch (error) {
         console.error("Teacher dashboard API error:", error);
