@@ -640,21 +640,6 @@ export default function DashboardPage() {
                 </button>
               }
             >
-              <div className="mb-3 flex gap-2 border-b border-slate-100">
-                <TabButton
-                  active={participantTab === "active"}
-                  onClick={() => setParticipantTab("active")}
-                  label="Aktive"
-                  count={dashboard?.participantReports?.active?.length ?? 0}
-                />
-                <TabButton
-                  active={participantTab === "planned"}
-                  onClick={() => setParticipantTab("planned")}
-                  label="Planlagte"
-                  count={dashboard?.participantReports?.planned?.length ?? 0}
-                />
-              </div>
-
               {loading ? (
                 <LoadingRows />
               ) : participantRows.length ? (
