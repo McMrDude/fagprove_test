@@ -1,7 +1,13 @@
 "use client";
 
+// React hooks:
+// useState stores information that can change.
+// useEffect runs code when the component mounts or its dependencies change.
+// useMemo avoids recalculating a value when its dependencies haven't changed.
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+
+// Icons used throughout the page.
 import {
   ArrowLeft,
   BookOpen,
@@ -19,18 +25,23 @@ import {
   BookMarked,
 } from "lucide-react";
 
+// Describes the information we expect for each participant.
+// The ID can be either a number or a string.
 type Participant = {
   id: number | string;
   name: string;
   phone_number: string;
 };
 
+// Describes one session within a course offering.
 type Session = {
   id: number | string;
   session_number: number;
   session_date: string;
 };
 
+// An offering represents one particular run of a course.
+// For example, English could have one offering in October and another in January.
 type Offering = {
   id: number | string;
   course_id: number | string;
@@ -38,11 +49,17 @@ type Offering = {
   first_date: string | null;
   last_date: string | null;
   session_count: number;
+
+  // Only these three status values are allowed.
   status: "planned" | "active" | "completed";
+
+  // Participants and sessions belonging to this offering.
   participants: Participant[];
   sessions: Session[];
 };
 
+// Describes a course subject, such as English or Mathematics.
+// Each course can have multiple offerings.
 type Course = {
   id: number | string;
   name: string;
@@ -50,10 +67,13 @@ type Course = {
   offerings: Offering[];
 };
 
+// Describes the data returned by the courses overview API.
 type ApiResponse = {
   success: boolean;
   error?: string;
   courses?: Course[];
+
+  // Optional summary numbers used by the dashboard's statistic cards.
   stats?: {
     courses: number;
     offerings: number;
@@ -64,22 +84,37 @@ type ApiResponse = {
   };
 };
 
+// Converts the internal status values into Norwegian labels.
+// "as const" preserves the exact string types.
 const statusLabels = {
   planned: "Planlagt",
   active: "Pågår",
   completed: "Fullført",
 } as const;
 
+// Tailwind CSS classes for each status badge.
+// This keeps the styling consistent wherever a status is displayed.
 const statusStyles = {
   planned: "bg-amber-50 text-amber-700 ring-amber-200",
   active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   completed: "bg-slate-100 text-slate-600 ring-slate-200",
 } as const;
 
+// Converts a date string into a readable Norwegian date.
+// For example, "2026-10-16" becomes something like "16. okt. 2026".
 function formatDate(value: string | null | undefined) {
+  // If no date was provided, show a fallback message.
   if (!value) return "Ikke satt";
+
+  // Use midday instead of midnight to reduce the risk of the date
+  // appearing as the previous day due to timezone differences.
+  // slice(0, 10) takes only the YYYY-MM-DD part of the value.
   const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+
+  // Check whether JavaScript was able to create a valid date.
   if (Number.isNaN(date.getTime())) return "Ikke satt";
+
+  // Format the date according to Norwegian language conventions.
   return new Intl.DateTimeFormat("nb-NO", {
     day: "numeric",
     month: "short",
@@ -87,51 +122,90 @@ function formatDate(value: string | null | undefined) {
   }).format(date);
 }
 
+// Formats the first and last dates of an offering into one date range.
 function formatDateRange(first: string | null, last: string | null) {
+  // If neither date exists, there is no range to display.
   if (!first && !last) return "Datoer ikke satt";
+
+  // If both dates exist and differ, show the full range.
   if (first && last && first !== last) {
     return `${formatDate(first)} – ${formatDate(last)}`;
   }
+
+  // If only one date exists, or both dates are the same, show one date.
   return formatDate(first || last);
 }
 
 export default function CoursesPage() {
+  // Stores the full response received from the API.
+  // null means the response hasn't been stored yet.
   const [data, setData] = useState<ApiResponse | null>(null);
+
+  // Controls which page state is displayed while data is loading.
   const [loading, setLoading] = useState(true);
+
+  // Stores an error message if loading the data fails.
   const [error, setError] = useState("");
+
+  // Stores the text entered into the search box.
   const [search, setSearch] = useState("");
+
+  // Stores the selected status filter.
+  // "all" means that no status filter is applied.
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Stores the IDs of course offerings whose details are expanded.
+  // An array allows several offerings to be open simultaneously.
   const [expandedOfferings, setExpandedOfferings] = useState<string[]>([]);
 
+  // Fetch the course overview when the page first loads.
   useEffect(() => {
+    // This flag prevents an old request from updating state after
+    // the component has been removed from the page.
     let cancelled = false;
 
+    // Loads the course overview from our API route.
     async function loadCourses() {
       try {
         setLoading(true);
         setError("");
 
+        // Request the latest overview from the server.
+        // no-store prevents the browser from reusing a cached response.
         const response = await fetch("/api/courses/overview", {
           method: "GET",
           cache: "no-store",
         });
+
+        // Convert the JSON response into a JavaScript object.
+        // ApiResponse tells TypeScript what shape we expect.
         const result: ApiResponse = await response.json();
 
+        // Throw an error if the HTTP request failed or the API
+        // reports that it couldn't complete the operation.
         if (!response.ok || !result.success) {
           throw new Error(result.error || "Kunne ikke hente kursinformasjon.");
         }
 
+        // Only update the page if the request hasn't been cancelled.
         if (!cancelled) {
           setData(result);
-          // Open the first course offering automatically, if one exists.
+
+          // Get all offerings from all courses in one flat array.
+          // flatMap() combines the offerings arrays into a single array.
+          // at(0) selects the first offering, if one exists.
           const firstOffering = result.courses
             ?.flatMap((course) => course.offerings)
             .at(0);
+
+          // Automatically expand the first offering so the page
+          // doesn't initially show only collapsed course details.
           if (firstOffering) {
             setExpandedOfferings([String(firstOffering.id)]);
           }
         }
       } catch (err) {
+        // Display the error only if the request is still relevant.
         if (!cancelled) {
           setError(
             err instanceof Error
@@ -140,22 +214,37 @@ export default function CoursesPage() {
           );
         }
       } finally {
+        // Stop displaying the loading state after the request finishes,
+        // whether it succeeded or failed.
         if (!cancelled) setLoading(false);
       }
     }
 
+    // Start the request.
     loadCourses();
+
+    // Cleanup runs if the component unmounts.
     return () => {
       cancelled = true;
     };
   }, []);
 
+  // Calculate which courses should appear based on the search and status filter.
+  // useMemo recalculates this list only when data, search or statusFilter changes.
   const filteredCourses = useMemo(() => {
+    // Remove spaces at the beginning/end and normalize the search text.
+    // Norwegian locale-aware lowercasing helps with Norwegian text.
     const term = search.trim().toLocaleLowerCase("nb-NO");
 
+    // Start with the courses returned by the API.
+    // If courses is missing, use an empty array instead.
     return (data?.courses ?? [])
       .filter((course) => {
+        // With an empty search, keep every course.
         if (!term) return true;
+
+        // Keep a course if its name, teacher's name, or any enrolled
+        // participant's name contains the search text.
         return (
           course.name.toLocaleLowerCase("nb-NO").includes(term) ||
           (course.teacher_name ?? "").toLocaleLowerCase("nb-NO").includes(term) ||
@@ -166,32 +255,51 @@ export default function CoursesPage() {
           )
         );
       })
+
+      // Create a new course object with only the offerings matching
+      // the selected status. The original API data is not modified.
       .map((course) => ({
         ...course,
         offerings: course.offerings.filter((offering) => {
+          // "all" keeps every offering.
           if (statusFilter === "all") return true;
+
+          // Otherwise, keep only offerings with the selected status.
           return offering.status === statusFilter;
         }),
       }))
+
+      // When a specific status is selected, hide courses that have
+      // no offerings matching that status.
       .filter((course) => statusFilter === "all" || course.offerings.length > 0);
   }, [data, search, statusFilter]);
 
+  // Opens or closes an offering when the user clicks its header.
   function toggleOffering(id: number | string) {
+    // Convert the ID to a string so it matches the IDs stored in state.
     const key = String(id);
+
+    // Use the previous state to decide what the next state should be.
     setExpandedOfferings((current) =>
+      // If the offering is already open, remove its ID to close it.
       current.includes(key)
         ? current.filter((item) => item !== key)
+
+        // Otherwise, add its ID to the array to open it.
         : [...current, key]
     );
   }
 
+  // Read the summary statistics from the API response.
   const stats = data?.stats;
 
   return (
     <main className="min-h-screen bg-[#f7f8fc] text-slate-800">
+      {/* Sticky header stays visible while scrolling. */}
       <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
+            {/* Link back to the main dashboard. */}
             <Link
               href="/"
               aria-label="Tilbake til oversikten"
@@ -199,9 +307,11 @@ export default function CoursesPage() {
             >
               <ArrowLeft size={18} />
             </Link>
+
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm shadow-indigo-200">
               <BookOpen size={21} />
             </div>
+
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">
                 Kursbedriften AS
@@ -211,6 +321,8 @@ export default function CoursesPage() {
               </h1>
             </div>
           </div>
+
+          {/* A second navigation link, shown on larger screens. */}
           <Link
             href="/"
             className="hidden rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 sm:inline-flex"
@@ -221,17 +333,22 @@ export default function CoursesPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Intro banner explaining what the overview page contains. */}
         <section className="relative mb-7 overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 p-6 text-white shadow-lg shadow-indigo-100 sm:p-8">
+          {/* Decorative shapes in the background. */}
           <div className="pointer-events-none absolute -right-10 -top-16 h-64 w-64 rounded-full border-[35px] border-white/10" />
           <div className="pointer-events-none absolute -bottom-24 right-36 h-52 w-52 rounded-full bg-white/5" />
+
           <div className="relative max-w-2xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-indigo-50">
               <BookMarked size={14} />
               Administrasjon
             </div>
+
             <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
               Alle kurs. All oversikt.
             </h2>
+
             <p className="mt-3 max-w-xl text-sm leading-6 text-indigo-100 sm:text-base">
               Se fagene, ansvarlige lærere, kursperioder og hvem som er meldt på
               hvert enkelt kursoppsett.
@@ -239,6 +356,7 @@ export default function CoursesPage() {
           </div>
         </section>
 
+        {/* Show the statistic cards only if the API returned statistics. */}
         {stats && (
           <section className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
@@ -268,8 +386,8 @@ export default function CoursesPage() {
           </section>
         )}
 
-        
-        {/* Report: participants enrolled in planned courses */}
+        {/* REPORT: count participant enrollments in planned offerings. */}
+        {/* This section appears only after loading succeeds. */}
         {!loading && !error && data && (
           <section className="mb-7 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm sm:p-6">
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -287,33 +405,43 @@ export default function CoursesPage() {
                   Totalt antall påmeldinger
                 </p>
                 <p className="text-2xl font-extrabold text-indigo-800">
-                  {(data.courses ?? []).reduce(
-                    (total, course) =>
-                      total +
-                      course.offerings
-                        .filter((offering) => offering.status === "planned")
-                        .reduce(
-                          (sum, offering) =>
-                            sum + offering.participants.length,
-                          0
-                        ),
-                    0
-                  )}
+                  {
+                    // Add up the number of participants across all planned offerings.
+                    // reduce() keeps a running total as it loops through the courses.
+                    (data.courses ?? []).reduce(
+                      (total, course) =>
+                        // For each course, first keep only planned offerings.
+                        total +
+                        course.offerings
+                          .filter((offering) => offering.status === "planned")
+                          .reduce(
+                            // Count the participants in those offerings and add
+                            // the result to the overall total.
+                            (sum, offering) =>
+                              sum + offering.participants.length,
+                            0
+                          ),
+                      0
+                    )
+                  }
                 </p>
               </div>
             </div>
 
+            {/* Check whether at least one course has a planned offering. */}
             {(data.courses ?? []).some((course) =>
               course.offerings.some(
                 (offering) => offering.status === "planned"
               )
             ) ? (
+              // If planned offerings exist, show the report table.
               <div className="overflow-hidden rounded-xl border border-slate-200">
                 <div className="grid grid-cols-[1fr_auto] bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500">
                   <span>Kurs</span>
                   <span>Påmeldte</span>
                 </div>
 
+                {/* Keep only courses with at least one planned offering. */}
                 {(data.courses ?? [])
                   .filter((course) =>
                     course.offerings.some(
@@ -321,10 +449,14 @@ export default function CoursesPage() {
                     )
                   )
                   .map((course) => {
+                    // Get this course's planned offerings.
                     const plannedOfferings = course.offerings.filter(
                       (offering) => offering.status === "planned"
                     );
 
+                    // Count all enrollments across its planned offerings.
+                    // If the same participant is enrolled in two different
+                    // offerings, they count once in each offering.
                     const count = plannedOfferings.reduce(
                       (sum, offering) =>
                         sum + offering.participants.length,
@@ -353,6 +485,7 @@ export default function CoursesPage() {
                   })}
               </div>
             ) : (
+              // If no planned offerings exist, show a helpful empty state.
               <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
                 Det finnes ingen planlagte kurs med oppstart frem i tid.
               </p>
@@ -364,12 +497,15 @@ export default function CoursesPage() {
           </section>
         )}
 
+        {/* Search box and course-status filter. */}
         <section className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search
               size={18}
               className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
+
+            {/* Controlled input: its value comes from React state. */}
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -377,6 +513,8 @@ export default function CoursesPage() {
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50"
             />
           </div>
+
+          {/* Changing this dropdown updates statusFilter and filters the list. */}
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
@@ -390,12 +528,15 @@ export default function CoursesPage() {
           </select>
         </section>
 
+        {/* Show different content depending on the current page state. */}
         {loading ? (
+          // Loading state: the API request hasn't finished yet.
           <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500">
             <LoaderCircle size={30} className="mb-3 animate-spin text-indigo-600" />
             <p className="text-sm font-medium">Henter kurs og påmeldinger...</p>
           </div>
         ) : error ? (
+          // Error state: the request failed.
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6">
             <p className="font-bold text-rose-800">Kunne ikke laste kursene</p>
             <p className="mt-1 text-sm text-rose-700">{error}</p>
@@ -407,6 +548,7 @@ export default function CoursesPage() {
             </button>
           </div>
         ) : filteredCourses.length === 0 ? (
+          // Empty state: no courses match the current search and filter.
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
               <Search size={21} />
@@ -417,14 +559,20 @@ export default function CoursesPage() {
             </p>
           </div>
         ) : (
+          // Normal state: display all courses that match the search and filter.
           <section className="space-y-4">
             {filteredCourses.map((course) => {
+              // Count enrollments across this course's currently visible offerings.
+              // Because filteredCourses applies the status filter, this total can
+              // change when a particular status is selected.
               const enrollmentCount = course.offerings.reduce(
                 (total, offering) => total + offering.participants.length,
                 0
               );
 
               return (
+                // Each course gets its own article.
+                // The key helps React identify the course when rendering updates.
                 <article
                   key={String(course.id)}
                   className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:border-slate-300"
@@ -455,6 +603,8 @@ export default function CoursesPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Display each status that exists among the course's offerings. */}
                     <div className="flex flex-wrap gap-2">
                       {course.offerings.some((item) => item.status === "active") && (
                         <StatusPill status="active" />
@@ -468,23 +618,30 @@ export default function CoursesPage() {
                     </div>
                   </div>
 
+                  {/* Section containing the individual offerings for this course. */}
                   <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4 sm:px-6">
                     <p className="mb-3 text-xs font-bold uppercase tracking-[0.13em] text-slate-400">
                       Kursoppsett og deltakere
                     </p>
+
                     {course.offerings.length === 0 ? (
+                      // There are no offerings to show for this course.
                       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
                         Det er ikke opprettet noe kursoppsett for dette faget ennå.
                       </div>
                     ) : (
                       <div className="space-y-3">
+                        {/* Render each offering belonging to the course. */}
                         {course.offerings.map((offering) => {
+                          // Check whether this offering's details are currently open.
                           const isExpanded = expandedOfferings.includes(String(offering.id));
+
                           return (
                             <div
                               key={String(offering.id)}
                               className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                             >
+                              {/* Clicking this button expands or collapses the offering. */}
                               <button
                                 type="button"
                                 onClick={() => toggleOffering(offering.id)}
@@ -513,14 +670,18 @@ export default function CoursesPage() {
                                     </span>
                                   </div>
                                 </div>
+
+                                {/* Change the label and icon based on whether it's open. */}
                                 <span className="flex shrink-0 items-center gap-2 text-sm font-semibold text-indigo-700">
                                   {isExpanded ? "Skjul deltakere" : "Vis deltakere"}
                                   {isExpanded ? <ChevronUp size={17} /> : <ChevronDown size={17} />}
                                 </span>
                               </button>
 
+                              {/* Only render the details when the offering is expanded. */}
                               {isExpanded && (
                                 <div className="border-t border-slate-100 px-4 py-4">
+                                  {/* Display the individual sessions if any exist. */}
                                   {offering.sessions.length > 0 && (
                                     <div className="mb-5">
                                       <h4 className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
@@ -528,7 +689,10 @@ export default function CoursesPage() {
                                       </h4>
                                       <div className="flex flex-wrap gap-2">
                                         {offering.sessions
+                                          // slice() creates a copy so sort() doesn't
+                                          // modify the original sessions array.
                                           .slice()
+                                          // Sort by session number: 1, 2, 3, etc.
                                           .sort((a, b) => a.session_number - b.session_number)
                                           .map((session) => (
                                             <div
@@ -548,17 +712,22 @@ export default function CoursesPage() {
                                   <h4 className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
                                     Påmeldte deltakere
                                   </h4>
+
                                   {offering.participants.length === 0 ? (
+                                    // Show a message if nobody is enrolled.
                                     <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
                                       Ingen deltakere er meldt på dette kursoppsettet.
                                     </div>
                                   ) : (
+                                    // Otherwise, display the enrolled participants.
                                     <div className="overflow-hidden rounded-xl border border-slate-200">
                                       <div className="hidden grid-cols-[1fr_1fr] gap-3 bg-slate-50 px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-slate-400 sm:grid">
                                         <span>Deltaker</span>
                                         <span>Telefon</span>
                                       </div>
+
                                       {offering.participants
+                                        // Sort a copy of the participant list alphabetically.
                                         .slice()
                                         .sort((a, b) => a.name.localeCompare(b.name, "nb"))
                                         .map((participant) => (
@@ -601,6 +770,7 @@ export default function CoursesPage() {
           </section>
         )}
 
+        {/* Footer shown at the bottom of the page. */}
         <footer className="mt-8 flex flex-col gap-2 border-t border-slate-200 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <span>Kursbedriften AS · Intern kursadministrasjon</span>
           <span>Deltakerinformasjon er kun tilgjengelig for innloggede ansatte.</span>
@@ -610,6 +780,8 @@ export default function CoursesPage() {
   );
 }
 
+// Reusable component for displaying one statistic.
+// Props are the values passed into the component by its parent.
 function StatCard({
   icon,
   label,
@@ -621,6 +793,7 @@ function StatCard({
   value: number;
   tint: "indigo" | "violet" | "sky" | "emerald";
 }) {
+  // Choose the icon background/text colors based on the tint prop.
   const colors = {
     indigo: "bg-indigo-50 text-indigo-600",
     violet: "bg-violet-50 text-violet-600",
@@ -639,7 +812,10 @@ function StatCard({
   );
 }
 
+// Reusable badge showing an offering's status.
+// Offering["status"] reuses the status type defined in the Offering type above.
 function StatusPill({ status }: { status: Offering["status"] }) {
+  // Choose an icon based on the current status.
   const icon =
     status === "active" ? (
       <CheckCircle2 size={13} />
@@ -651,6 +827,7 @@ function StatusPill({ status }: { status: Offering["status"] }) {
 
   return (
     <span
+      // Look up the matching CSS classes and Norwegian label using the status.
       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${statusStyles[status]}`}
     >
       {icon}

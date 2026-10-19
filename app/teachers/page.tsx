@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface Teacher {
   id: string;
@@ -26,7 +27,10 @@ interface AssignmentData {
   }[];
 }
 
+
 export default function TeachersPage() {
+  const router = useRouter();
+
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
@@ -216,6 +220,14 @@ export default function TeachersPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-indigo-600"
+        >
+          <span className="transition group-hover:-translate-x-0.5">←</span>
+          Tilbake til oversikten
+        </button>
         <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">

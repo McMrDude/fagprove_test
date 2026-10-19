@@ -1,7 +1,14 @@
+
 "use client";
+
+// "use client" tells Next.js that this page runs in the browser.
+// We need this because the page uses React state, effects, clicks, and input fields.
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+// These are icons from the lucide-react library.
+// Each icon is a React component that can be placed inside our JSX.
 import {
   Activity,
   AlertCircle,
@@ -13,6 +20,7 @@ import {
   Clock3,
   GraduationCap,
   LayoutDashboard,
+  LogOut,
   Menu,
   Phone,
   Plus,
@@ -24,6 +32,8 @@ import {
   X,
 } from "lucide-react";
 
+// A TypeScript type describes what kind of data an object should contain.
+// DashboardCourse describes one course session displayed on the dashboard.
 type DashboardCourse = {
   id: number;
   session_id: number;
@@ -35,14 +45,17 @@ type DashboardCourse = {
   participant_count: number;
 };
 
+// Describes a recently registered participant and the courses they attend.
 type RecentParticipant = {
   id: number;
   name: string;
   phone_number: string;
-  registered_at: string | null;
+  registered_at: string | null; // null means there is no registration date.
   course_names: string[];
 };
 
+// Describes one course offering, meaning a specific scheduled run of a course.
+// For example, English offered in November is a different offering from English in January.
 type Offering = {
   id: number;
   course_id: number;
@@ -51,6 +64,7 @@ type Offering = {
   session_count: number;
 };
 
+// Describes a participant's enrollment in a specific course offering.
 type ParticipantReportRow = {
   participant_id: number;
   participant_name: string;
@@ -59,6 +73,7 @@ type ParticipantReportRow = {
   offering_id: number;
 };
 
+// Describes the data used in the completed-course report.
 type CompletionReport = {
   totalCompletedEnrollments: number;
   uniqueParticipants: number;
@@ -69,6 +84,8 @@ type CompletionReport = {
   }[];
 };
 
+// This is the main structure of the information returned by /api/dashboard.
+// Defining this type helps TypeScript catch mistakes when we use that data.
 type DashboardData = {
   success: boolean;
   today: string;
@@ -99,7 +116,10 @@ type DashboardData = {
   };
 };
 
+// Converts a date string into a longer, readable Norwegian date.
+// Example: "2026-10-16" becomes something like "16. oktober 2026".
 function formatDate(date: string) {
+  // If there is no date, show a message instead of trying to format it.
   if (!date) return "Dato ikke satt";
 
   return new Intl.DateTimeFormat("nb-NO", {
@@ -108,8 +128,12 @@ function formatDate(date: string) {
     year: "numeric",
     timeZone: "Europe/Oslo",
   }).format(new Date(`${date}T12:00:00`));
+  // T12:00:00 sets the time to midday to help avoid date changes
+  // caused by timezone conversions around midnight.
 }
 
+// Similar to formatDate, but uses a shorter month name.
+// This is useful for the small course cards in the registration modal.
 function formatShortDate(date: string | null) {
   if (!date) return "Dato ikke satt";
 
@@ -120,6 +144,7 @@ function formatShortDate(date: string | null) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
+// Returns a greeting based on the current hour in Norway.
 function getGreeting() {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", {
@@ -129,83 +154,174 @@ function getGreeting() {
     }).format(new Date())
   );
 
+  // These conditions are checked from top to bottom.
   if (hour < 10) return "God morgen";
   if (hour < 18) return "God dag";
   return "God kveld";
 }
 
+// Turns a person's name into initials.
+// Example: "Kari Nordmann" becomes "KN".
+// These initials are used in the circular profile icons.
 function initials(name: string) {
   return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
+    .trim() // Removes whitespace at the beginning and end.
+    .split(/\s+/) // Splits the name at one or more spaces.
+    .slice(0, 2) // Keeps only the first two name parts.
     .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
+    // Gets the first character of each part and makes it uppercase.
+    // ?. prevents an error if the character does not exist.
+    // ?? "" provides an empty string if the result is null or undefined.
+    .join(""); // Combines the initials into one string.
 }
 
+// The main dashboard page.
+// Next.js displays this component when the user visits the "/" route.
 export default function DashboardPage() {
+  // useRouter lets us navigate to other pages in the application.
+  // Example: router.push("/participants") opens the participants page.
   const router = useRouter();
 
+  // useState stores information that can change while the page is open.
+  // When a state value changes, React updates the relevant UI.
+
+  // dashboard stores the data fetched from the dashboard API.
+  // null means the data has not been loaded yet.
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+
+  // Stores course offerings available when registering a participant.
   const [offerings, setOfferings] = useState<Offering[]>([]);
+
+  // Controls whether the dashboard is currently loading its data.
   const [loading, setLoading] = useState(true);
+
+  // Prevents repeated clicks while the logout request is running.
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  // Stores an error message if the dashboard request fails.
   const [loadError, setLoadError] = useState("");
+
+  // Controls whether the mobile navigation menu is open.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // These states control the participant registration modal.
   const [registerParticipantOpen, setRegisterParticipantOpen] =
     useState(false);
+
+  // These store the values typed into the registration form.
   const [participantName, setParticipantName] = useState("");
   const [participantPhone, setParticipantPhone] = useState("");
+
+  // Stores the IDs of the course offerings selected by the employee.
+  // An array allows the participant to be enrolled in multiple courses.
   const [selectedOfferings, setSelectedOfferings] = useState<number[]>([]);
+
+  // Indicates that the registration request is currently being processed.
   const [registering, setRegistering] = useState(false);
+
+  // Stores registration errors and success messages separately.
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
 
+  // Determines whether we display participants from active or planned courses.
+  // The type allows only these two string values.
   const [participantTab, setParticipantTab] =
     useState<"active" | "planned">("active");
 
+  // useCallback keeps a stable function reference between renders,
+  // unless one of the values in its dependency array changes.
+  // This is useful here because the function is also used by useEffect.
   const loadDashboard = useCallback(async () => {
+    // Start the loading indicator and clear any previous error.
     setLoading(true);
     setLoadError("");
 
     try {
+      // fetch sends an HTTP request to our own Next.js API endpoint.
+      // The API is responsible for retrieving the dashboard data.
       const response = await fetch("/api/dashboard", {
         cache: "no-store",
+        // Avoid using a cached response; request fresh dashboard data.
       });
+
+      // Convert the response body from JSON into a JavaScript object.
       const result = await response.json();
 
+      // HTTP 401 means the user is not authenticated.
+      // Send them to the login page instead of displaying the dashboard.
       if (response.status === 401) {
         router.push("/login");
-        return;
+        return; // Stop executing this function.
       }
 
+      // response.ok is true for successful HTTP status codes.
+      // result.success is an additional success flag provided by our API.
       if (!response.ok || !result.success) {
         throw new Error(result.error ?? "Kunne ikke hente oversikten.");
       }
 
+      // Save the fetched data in React state.
+      // This causes React to render the dashboard with the new information.
       setDashboard(result as DashboardData);
     } catch (error) {
+      // If the request fails, show a useful error message.
+      // "instanceof Error" checks whether the caught value is an Error object.
       setLoadError(
         error instanceof Error
           ? error.message
           : "Kunne ikke laste oversikten."
       );
     } finally {
+      // finally runs whether the request succeeded or failed.
+      // Stop the loading indicator when the request has finished.
       setLoading(false);
     }
   }, [router]);
+  // The dependency array contains router because this callback uses it.
+  // React can reuse this function while router remains the same.
 
+  // Clears the authentication cookie through the logout API, then returns to login.
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Kunne ikke logge ut. Prøv igjen.");
+      }
+
+      // replace() prevents the browser's Back button from returning to this page.
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Kunne ikke logge ut. Prøv igjen."
+      );
+      setLoggingOut(false);
+    }
+  }
+
+  // Fetches the course offerings available for participant registration.
   const loadRegistrationOfferings = useCallback(async () => {
     try {
       const response = await fetch("/api/participants/registration-options", {
         cache: "no-store",
       });
+
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error ?? "Kunne ikke hente tilgjengelige kurs.");
+        throw new Error(
+          result.error ?? "Kunne ikke hente tilgjengelige kurs."
+        );
       }
 
+      // If the API returns no offerings, use an empty array instead.
       setOfferings(result.offerings ?? []);
     } catch (error) {
       setRegisterError(
@@ -215,53 +331,78 @@ export default function DashboardPage() {
       );
     }
   }, []);
+  // The empty dependency array means this callback does not depend
+  // on any changing values from this component.
 
+  // useEffect runs after React renders the component.
+  // This effect loads the dashboard when the page first opens.
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+  // It runs again if the loadDashboard function reference changes.
+  // "void" indicates that we are intentionally not awaiting the Promise here.
 
+  // Load the available course offerings when the registration modal opens.
   useEffect(() => {
     if (registerParticipantOpen) {
       void loadRegistrationOfferings();
     }
   }, [registerParticipantOpen, loadRegistrationOfferings]);
+  // The effect checks the modal state.
+  // Closing the modal does not trigger another fetch of the offerings.
 
+  // Adds or removes an offering ID from the selected course list.
   function toggleOffering(offeringId: number) {
     setSelectedOfferings((current) =>
+      // If the offering is already selected, remove it.
       current.includes(offeringId)
         ? current.filter((id) => id !== offeringId)
+        // Otherwise, create a new array with the offering added.
         : [...current, offeringId]
     );
   }
+  // current is the previous state.
+  // Using the previous state is useful when the next value depends on it.
 
+  // Validates and submits the participant registration form.
   async function registerParticipant() {
+    // Clear messages from any previous registration attempt.
     setRegisterError("");
     setRegisterSuccess("");
 
+    // trim() removes unnecessary spaces around the entered values.
     const cleanName = participantName.trim();
     const cleanPhone = participantPhone.trim();
 
+    // Do not allow registration if the name is empty.
     if (!cleanName) {
       setRegisterError("Skriv inn navnet til deltakeren.");
       return;
     }
 
+    // This regular expression requires exactly eight digits.
+    // ^ means the beginning, \d means a digit, and $ means the end.
     if (!/^\d{8}$/.test(cleanPhone)) {
       setRegisterError("Telefonnummeret må bestå av 8 siffer.");
       return;
     }
 
+    // The participant must be assigned to at least one offering.
     if (selectedOfferings.length === 0) {
       setRegisterError("Velg minst ett planlagt kurs.");
       return;
     }
 
+    // Prevent duplicate submissions while the request is running.
     setRegistering(true);
 
     try {
+      // Send the participant information to the API using POST.
+      // POST is commonly used when creating new records.
       const response = await fetch("/api/participants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // JSON.stringify converts our JavaScript object into JSON text.
         body: JSON.stringify({
           name: cleanName,
           phone: cleanPhone,
@@ -271,42 +412,64 @@ export default function DashboardPage() {
 
       const result = await response.json();
 
+      // The API may return an error even if the request reached the server.
       if (!response.ok || !result.success) {
-        throw new Error(result.error ?? "Kunne ikke registrere deltakeren.");
+        throw new Error(
+          result.error ?? "Kunne ikke registrere deltakeren."
+        );
       }
 
+      // Show a success message and reset the form fields.
       setRegisterSuccess(`${cleanName} ble registrert!`);
       setParticipantName("");
       setParticipantPhone("");
       setSelectedOfferings([]);
 
+      // Reload the dashboard so the new participant appears in its lists
+      // and any affected statistics can be updated.
       await loadDashboard();
 
+      // Close the modal after a short delay so the user can see the message.
       window.setTimeout(() => {
         setRegisterParticipantOpen(false);
         setRegisterSuccess("");
       }, 900);
     } catch (error) {
+      // Display an error if registration fails.
       setRegisterError(
         error instanceof Error
           ? error.message
           : "Noe gikk galt under registreringen."
       );
     } finally {
+      // Re-enable the registration button after the request finishes.
       setRegistering(false);
     }
   }
 
+  // These are derived values: they are calculated from existing state.
+  // We do not need separate useState calls for values we can calculate.
+
+  // Use the logged-in user's name, or a fallback while data is unavailable.
   const userName = dashboard?.user?.name || "Ansatt";
+
+  // Extract the first name for the welcome message.
   const firstName = userName.trim().split(/\s+/)[0] || "Ansatt";
+
+  // Shortcuts to the statistics and follow-up counts in the API response.
   const stats = dashboard?.stats;
   const attention = dashboard?.attention;
 
+  // Choose which participant list to display based on the selected tab.
+  // The ?? [] fallback ensures we always have an array to work with.
   const participantRows =
     participantTab === "active"
       ? dashboard?.participantReports?.active ?? []
       : dashboard?.participantReports?.planned ?? [];
 
+  // Navigation items are stored in an array so the menu can be generated
+  // with map() instead of repeating nearly identical button markup.
+  // Each item contains a label, an icon component, and a destination URL.
   const navItems = [
     { label: "Oversikt", icon: LayoutDashboard, href: "/" },
     { label: "Deltakere", icon: Users, href: "/participants" },
@@ -314,9 +477,11 @@ export default function DashboardPage() {
     { label: "Lærere", icon: GraduationCap, href: "/teachers" },
   ];
 
+  // Everything below this point is JSX: the structure of the page.
+  // Curly braces {} let us use JavaScript values and expressions inside JSX.
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      {/* Mobile header */}
+      {/* MOBILE HEADER: only visible on smaller screens. */}
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
         <button
           onClick={() => router.push("/")}
@@ -331,24 +496,30 @@ export default function DashboardPage() {
           </span>
         </button>
 
+        {/* Toggle the mobile menu open or closed when clicked. */}
         <button
           onClick={() => setMobileMenuOpen((open) => !open)}
           className="rounded-lg border border-slate-200 p-2"
           aria-label="Åpne meny"
         >
+          {/* Show an X when open, or a menu icon when closed. */}
           {mobileMenuOpen ? <X size={19} /> : <Menu size={19} />}
         </button>
       </header>
 
+      {/* Render the mobile navigation only when its state is true. */}
       {mobileMenuOpen && (
         <div className="fixed inset-x-0 top-16 z-30 border-b border-slate-200 bg-white p-3 shadow-lg lg:hidden">
+          {/* map() creates one button for each object in navItems. */}
           {navItems.map((item) => {
+            // A component can be stored in a variable and rendered as <Icon />.
             const Icon = item.icon;
 
             return (
               <button
                 key={item.label}
                 onClick={() => {
+                  // Close the menu first, then navigate to the selected page.
                   setMobileMenuOpen(false);
                   router.push(item.href);
                 }}
@@ -360,11 +531,21 @@ export default function DashboardPage() {
               </button>
             );
           })}
+
+          {/* Log out from the mobile navigation. */}
+          <button
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
+            className="mt-2 flex w-full items-center gap-3 rounded-lg border-t border-slate-100 px-3 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+          >
+            <LogOut size={18} />
+            {loggingOut ? "Logger ut..." : "Logg ut"}
+          </button>
         </div>
       )}
 
       <div className="mx-auto flex min-h-screen max-w-[1800px]">
-        {/* Sidebar */}
+        {/* DESKTOP SIDEBAR: hidden on small screens, visible from lg upwards. */}
         <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r border-slate-200 bg-white px-4 py-6 lg:flex">
           <button
             onClick={() => router.push("/")}
@@ -390,6 +571,8 @@ export default function DashboardPage() {
           <nav className="space-y-1">
             {navItems.map((item, index) => {
               const Icon = item.icon;
+
+              // The first item is the dashboard, so it is highlighted as active.
               const active = index === 0;
 
               return (
@@ -404,6 +587,8 @@ export default function DashboardPage() {
                 >
                   <Icon size={18} />
                   {item.label}
+
+                  {/* Show a small dot beside the active navigation item. */}
                   {active && (
                     <span className="ml-auto h-1.5 w-1.5 rounded-full bg-white" />
                   )}
@@ -412,6 +597,7 @@ export default function DashboardPage() {
             })}
           </nav>
 
+          {/* mt-auto pushes the user information to the bottom of the sidebar. */}
           <div className="mt-auto border-t border-slate-100 pt-4">
             <div className="flex items-center gap-3 px-2">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-extrabold text-indigo-700">
@@ -422,17 +608,29 @@ export default function DashboardPage() {
                   {userName}
                 </span>
                 <span className="text-xs text-slate-400">
+                  {/* Display a different label based on the user's role. */}
                   {dashboard?.user?.role === "admin"
                     ? "Administrator"
                     : "Kontoransatt"}
                 </span>
               </span>
             </div>
+
+            {/* Desktop logout button below the signed-in user's information. */}
+            <button
+              onClick={() => void handleLogout()}
+              disabled={loggingOut}
+              className="mt-4 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <LogOut size={17} />
+              {loggingOut ? "Logger ut..." : "Logg ut"}
+            </button>
           </div>
         </aside>
 
-        {/* Main */}
+        {/* MAIN CONTENT: this is where the dashboard sections are displayed. */}
         <main className="min-w-0 flex-1 lg:ml-60">
+          {/* DESKTOP TOP BAR: hidden on mobile screens. */}
           <header className="hidden h-14 items-center justify-between border-b border-slate-200 bg-white px-8 lg:flex">
             <div className="text-sm text-slate-500">
               Administrasjon <span className="mx-2 text-slate-300">/</span>
@@ -440,6 +638,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Shortcut to the report of participant enrollments. */}
               <button
                 onClick={() => router.push("/enrollments")}
                 className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
@@ -447,6 +646,8 @@ export default function DashboardPage() {
                 <Search size={15} />
                 Påmeldingsrapport
               </button>
+
+              {/* Clicking this button requests fresh dashboard data. */}
               <button
                 onClick={() => void loadDashboard()}
                 className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
@@ -459,7 +660,7 @@ export default function DashboardPage() {
           </header>
 
           <div className="mx-auto max-w-[1400px] space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-            {/* Welcome */}
+            {/* WELCOME SECTION: greeting, date, and new-participant button. */}
             <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <p className="mb-1 text-xs font-bold uppercase tracking-wider text-indigo-600">
@@ -476,8 +677,12 @@ export default function DashboardPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-600">
                   <CalendarDays size={16} className="text-indigo-600" />
-                  {dashboard?.today ? formatDate(dashboard.today) : "Henter dato..."}
+                  {dashboard?.today
+                    ? formatDate(dashboard.today)
+                    : "Henter dato..."}
                 </span>
+
+                {/* Open the registration modal and clear old messages. */}
                 <button
                   onClick={() => {
                     setRegisterError("");
@@ -492,6 +697,7 @@ export default function DashboardPage() {
               </div>
             </section>
 
+            {/* Display this section only if loading the dashboard failed. */}
             {loadError && (
               <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-700">
                 <AlertCircle size={18} className="mt-0.5 shrink-0" />
@@ -508,7 +714,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Key statistics */}
+            {/* KEY STATISTICS: summary cards showing important totals. */}
             <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <StatCard
                 title="Deltakere"
@@ -536,15 +742,18 @@ export default function DashboardPage() {
               />
             </section>
 
-            {/* Today's courses and actions */}
+            {/* TODAY'S COURSES AND QUICK ACTIONS. */}
             <section className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_0.8fr]">
               <Panel
                 title="Kurs i dag"
                 subtitle={
-                  dashboard?.today ? formatDate(dashboard.today) : "Dagens kursøkter"
+                  dashboard?.today
+                    ? formatDate(dashboard.today)
+                    : "Dagens kursøkter"
                 }
                 icon={CalendarDays}
                 action={
+                  // The action prop allows Panel to display a button in its header.
                   <button
                     onClick={() => router.push("/courses")}
                     className="text-xs font-bold text-indigo-600 hover:text-indigo-800"
@@ -553,9 +762,12 @@ export default function DashboardPage() {
                   </button>
                 }
               >
+                {/* Conditional rendering selects the appropriate display. */}
                 {loading ? (
+                  // Show placeholders while the API request is running.
                   <LoadingRows />
                 ) : dashboard?.todayCourses?.length ? (
+                  // If courses exist, create a row for each one.
                   <div className="divide-y divide-slate-100">
                     {dashboard.todayCourses.map((course) => (
                       <div
@@ -578,6 +790,8 @@ export default function DashboardPage() {
                             {course.participant_count}
                           </p>
                           <p className="text-[11px] text-slate-400">deltakere</p>
+
+                          {/* Show a warning if no teacher has been assigned. */}
                           {!course.teacher_assigned && (
                             <span className="text-[10px] font-bold text-amber-700">
                               Mangler lærer
@@ -588,6 +802,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : (
+                  // If there are no courses today, show an empty-state message.
                   <EmptyState
                     icon={CalendarDays}
                     title="Ingen kurs i dag"
@@ -596,6 +811,7 @@ export default function DashboardPage() {
                 )}
               </Panel>
 
+              {/* Reusable shortcut buttons for common office tasks. */}
               <Panel title="Snarveier" subtitle="Vanlige oppgaver" icon={Activity}>
                 <div className="space-y-2">
                   <QuickAction
@@ -626,7 +842,7 @@ export default function DashboardPage() {
               </Panel>
             </section>
 
-            {/* Enrolled participants */}
+            {/* ENROLLMENT LIST: displays participants in active or planned courses. */}
             <Panel
               title="Påmeldte deltakere"
               subtitle="Deltakere fordelt på aktive og planlagte kurs."
@@ -644,9 +860,11 @@ export default function DashboardPage() {
                 <LoadingRows />
               ) : participantRows.length ? (
                 <div className="divide-y divide-slate-100">
+                  {/* Show at most six rows in this dashboard section. */}
                   {participantRows.slice(0, 6).map((row) => (
                     <div
                       key={`${row.offering_id}-${row.participant_id}`}
+                      // The combined ID gives each enrollment row a stable key.
                       className="flex items-center gap-3 py-3"
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-700">
@@ -666,6 +884,8 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   ))}
+
+                  {/* Only show this link if more than six enrollments exist. */}
                   {participantRows.length > 6 && (
                     <button
                       onClick={() => router.push("/enrollments")}
@@ -676,6 +896,7 @@ export default function DashboardPage() {
                   )}
                 </div>
               ) : (
+                // If the selected list is empty, explain which list is empty.
                 <EmptyState
                   icon={Users}
                   title={
@@ -688,7 +909,7 @@ export default function DashboardPage() {
               )}
             </Panel>
 
-            {/* Completion report */}
+            {/* COMPLETION REPORT: shows the course-completion totals. */}
             <Panel
               title="Fullførte kurs"
               subtitle="Hvor mange kursdeltakelser som er registrert som fullført."
@@ -730,8 +951,12 @@ export default function DashboardPage() {
               ) : dashboard?.completionReport?.byCourse?.length ? (
                 <div className="space-y-3">
                   {dashboard.completionReport.byCourse.map((course) => {
+                    // Calculate each course's share of all completed enrollments.
+                    // This measures the distribution of completions, not the
+                    // percentage of participants in that course who passed.
                     const total =
                       dashboard.completionReport.totalCompletedEnrollments;
+
                     const percentage =
                       total > 0
                         ? Math.min(
@@ -739,6 +964,8 @@ export default function DashboardPage() {
                             100
                           )
                         : 0;
+                    // Avoid dividing by zero when no completions exist.
+                    // Math.min ensures the bar never exceeds 100%.
 
                     return (
                       <div key={course.course_id}>
@@ -750,6 +977,7 @@ export default function DashboardPage() {
                             {course.completed_enrollments}
                           </span>
                         </div>
+                        {/* The inner div's width controls the progress bar length. */}
                         <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <div
                             className="h-full rounded-full bg-emerald-500"
@@ -767,7 +995,7 @@ export default function DashboardPage() {
               )}
             </Panel>
 
-            {/* Items requiring follow-up */}
+            {/* FOLLOW-UP ITEMS: things the office worker may need to investigate. */}
             <Panel
               title="Trenger oppfølging"
               subtitle="Velg en rad for å gå til riktig oversikt."
@@ -801,6 +1029,7 @@ export default function DashboardPage() {
               </div>
             </Panel>
 
+            {/* FOOTER: small text at the bottom of the dashboard. */}
             <footer className="border-t border-slate-200 pt-4 text-xs text-slate-400">
               Kursbedriften AS · Administrasjonssystem
             </footer>
@@ -808,17 +1037,22 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* Register participant modal */}
+      {/* REGISTRATION MODAL: only rendered when the state is true. */}
       {registerParticipantOpen && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           onMouseDown={(event) => {
+            // Close the modal if the user clicks the dark background itself.
+            // event.target is the element clicked.
+            // event.currentTarget is the element holding this event handler.
+            // Comparing them prevents clicks inside the form from closing it.
             if (event.target === event.currentTarget && !registering) {
               setRegisterParticipantOpen(false);
             }
           }}
         >
           <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+            {/* Modal heading and close button. */}
             <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <h2 className="text-lg font-black text-slate-900">
@@ -839,6 +1073,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-4 p-5">
+              {/* Show an error message only when registerError is not empty. */}
               {registerError && (
                 <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   <AlertCircle size={17} className="mt-0.5 shrink-0" />
@@ -846,6 +1081,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* Show the success message after a successful API response. */}
               {registerSuccess && (
                 <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
                   <Check size={17} />
@@ -853,6 +1089,7 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* NAME INPUT: value connects the field to React state. */}
               <div>
                 <label
                   htmlFor="participant-name"
@@ -863,6 +1100,7 @@ export default function DashboardPage() {
                 <input
                   id="participant-name"
                   value={participantName}
+                  // Update state every time the user types.
                   onChange={(event) => setParticipantName(event.target.value)}
                   placeholder="F.eks. Kari Nordmann"
                   autoComplete="name"
@@ -870,6 +1108,7 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* PHONE INPUT: keep the field to a maximum of eight digits. */}
               <div>
                 <label
                   htmlFor="participant-phone"
@@ -884,6 +1123,7 @@ export default function DashboardPage() {
                   maxLength={8}
                   value={participantPhone}
                   onChange={(event) =>
+                    // Remove non-digit characters and keep at most eight digits.
                     setParticipantPhone(
                       event.target.value.replace(/\D/g, "").slice(0, 8)
                     )
@@ -894,6 +1134,7 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* COURSE SELECTION: let the employee choose one or more offerings. */}
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <label className="text-sm font-bold text-slate-700">
@@ -904,15 +1145,18 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
+                {/* If offerings exist, show a selectable button for each one. */}
                 {offerings.length ? (
                   <div className="max-h-64 space-y-2 overflow-y-auto">
                     {offerings.map((offering) => {
+                      // Check whether this offering's ID is in the selected array.
                       const selected = selectedOfferings.includes(offering.id);
 
                       return (
                         <button
                           key={offering.id}
                           type="button"
+                          // Reuse the toggle function to select or deselect this course.
                           onClick={() => toggleOffering(offering.id)}
                           className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left ${
                             selected
@@ -927,6 +1171,7 @@ export default function DashboardPage() {
                                 : "border-slate-300 text-transparent"
                             }`}
                           >
+                            {/* The checkmark is visible when the course is selected. */}
                             <Check size={13} />
                           </span>
                           <span className="min-w-0 flex-1">
@@ -949,6 +1194,7 @@ export default function DashboardPage() {
                     })}
                   </div>
                 ) : (
+                  // If there are no offerings, explain how to create one.
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
                     <p className="text-sm font-bold text-slate-700">
                       Ingen tilgjengelige kurs
@@ -967,6 +1213,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* MODAL FOOTER: cancel and submit buttons. */}
             <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:justify-end">
               <button
                 onClick={() => setRegisterParticipantOpen(false)}
@@ -975,12 +1222,16 @@ export default function DashboardPage() {
               >
                 Avbryt
               </button>
+
               <button
+                // Call the async function when the user submits the form.
                 onClick={() => void registerParticipant()}
+                // Disable submission while registering or if no offerings exist.
                 disabled={registering || offerings.length === 0}
                 className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {registering ? (
+                  // Show a spinner and different text while the request is running.
                   <>
                     <RefreshCw size={15} className="animate-spin" />
                     Registrerer...
@@ -1000,6 +1251,14 @@ export default function DashboardPage() {
   );
 }
 
+// -----------------------------------------------------------------------------
+// REUSABLE UI COMPONENTS
+// -----------------------------------------------------------------------------
+// These components are outside DashboardPage so that the same layout patterns
+// can be reused without copying their JSX into every section.
+
+// Panel provides a consistent card with a heading, optional subtitle,
+// optional action on the right, and a content area.
 function Panel({
   title,
   subtitle,
@@ -1018,24 +1277,32 @@ function Panel({
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+            {/* Icon is a component passed in through the icon prop. */}
             <Icon size={18} />
           </span>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-extrabold text-slate-900">
               {title}
             </h2>
+            {/* The subtitle is optional, so only render it when provided. */}
             {subtitle && (
               <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>
             )}
           </div>
         </div>
+
+        {/* Render the optional action, such as a report link or badge. */}
         {action}
       </div>
+
+      {/* children represents whatever content is placed inside <Panel>...</Panel>. */}
       <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
 
+// StatCard displays one number and its label.
+// It is reused for participant, teacher, and course statistics.
 function StatCard({
   title,
   value,
@@ -1055,6 +1322,7 @@ function StatCard({
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold text-slate-500">{title}</p>
         <p className="mt-0.5 text-2xl font-black text-slate-900">
+          {/* Show a dash during loading; otherwise show the value or zero. */}
           {loading ? "—" : value ?? 0}
         </p>
       </div>
@@ -1062,6 +1330,8 @@ function StatCard({
   );
 }
 
+// QuickAction is a reusable button that includes an icon, label, and arrow.
+// Its parent supplies the onClick function, so it can navigate anywhere.
 function QuickAction({
   icon: Icon,
   title,
@@ -1090,6 +1360,9 @@ function QuickAction({
   );
 }
 
+// TabButton is a reusable tab-style button.
+// It accepts the current active state, a click function, a label, and a count.
+// It is defined here even though this dashboard currently does not render it.
 function TabButton({
   active,
   onClick,
@@ -1122,6 +1395,8 @@ function TabButton({
   );
 }
 
+// AttentionItem displays a warning or follow-up task.
+// Clicking it runs the onClick function supplied by the parent.
 function AttentionItem({
   count,
   title,
@@ -1137,6 +1412,8 @@ function AttentionItem({
   onClick: () => void;
   tone: "amber" | "rose" | "violet";
 }) {
+  // Map each allowed tone to its Tailwind CSS color classes.
+  // The tone type prevents unsupported values from being passed in.
   const styles = {
     amber: "bg-amber-50 text-amber-700",
     rose: "bg-rose-50 text-rose-700",
@@ -1148,7 +1425,9 @@ function AttentionItem({
       onClick={onClick}
       className="flex items-center gap-3 rounded-lg border border-slate-100 p-3 text-left transition hover:bg-slate-50"
     >
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles[tone]}`}>
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles[tone]}`}
+      >
         <ShieldAlert size={17} />
       </span>
       <span className="min-w-0 flex-1">
@@ -1158,12 +1437,15 @@ function AttentionItem({
         </span>
       </span>
       <span className="text-lg font-black text-slate-900">
+        {/* Do not display the count as if it were final while data is loading. */}
         {loading ? "—" : count}
       </span>
     </button>
   );
 }
 
+// EmptyState is displayed when a section has no data to show.
+// It gives the user an explanation instead of leaving a blank area.
 function EmptyState({
   icon: Icon,
   title,
@@ -1186,9 +1468,12 @@ function EmptyState({
   );
 }
 
+// LoadingRows creates animated placeholder rows.
+// These are displayed while data is being fetched from the API.
 function LoadingRows() {
   return (
     <div className="space-y-3">
+      {/* Render three placeholder rows using map(). */}
       {[1, 2, 3].map((item) => (
         <div key={item} className="flex animate-pulse items-center gap-3 py-2">
           <div className="h-9 w-9 rounded-lg bg-slate-100" />

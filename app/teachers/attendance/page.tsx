@@ -98,9 +98,9 @@ export default function TeacherAttendancePage() {
   const [savingParticipantId, setSavingParticipantId] = useState<number | null>(
     null
   );
-  const [reviewingParticipantId, setReviewingParticipantId] = useState<
-    number | null
-  >(null);
+  const [reviewingParticipantId, setReviewingParticipantId] = useState<number | null>(
+    null
+  );
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
