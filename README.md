@@ -66,8 +66,18 @@ Databasen inneholder disse tabellene:
    ```
 
 4. Opprett en `.env.local`-fil i prosjektets hovedmappe.
+
 5. Legg inn miljøvariablene som prosjektet trenger, med verdiene fra ditt eget Supabase-prosjekt og en sikker autentiseringshemmelighet. Bruk de nøyaktige variabelnavnene som koden forventer.
-6. Sørg for at databasetabellene er opprettet i Supabase. Bruk SQL-oppsettet funnet i filen schema.sql i supabase sin SQL editor for å kjapt sette opp databasen
+
+   **Miljøvariabler:**
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   AUTH_SECRET=your_auth_secret
+   ```
+
+6. Sørg for at databasetabellene er opprettet i Supabase. Kjør SQL-oppsettet fra `schema.sql` i Supabase SQL Editor for å opprette tabellene og begrensningene databasen trenger.
 
 ### Start nettsiden
 
