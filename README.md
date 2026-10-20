@@ -91,4 +91,4 @@ npm run dev
 
 ### Viktig
 
-Ikke del `.env.local` eller legg inn passord, autentiseringshemmeligheter eller private Supabase-nøkler i GitHub. Disse opplysningene skal holdes hemmelige.
+Ikke del `.env` eller legg inn passord, autentiseringshemmeligheter eller private Supabase-nøkler i GitHub. Disse opplysningene skal holdes hemmelige.
