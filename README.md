@@ -65,7 +65,7 @@ Databasen inneholder disse tabellene:
    npm install
    ```
 
-4. Opprett en `.env.local`-fil i prosjektets hovedmappe.
+4. Opprett en `.env`-fil i prosjektets hovedmappe.
 
 5. Legg inn miljøvariablene som prosjektet trenger, med verdiene fra ditt eget Supabase-prosjekt og en sikker autentiseringshemmelighet. Bruk de nøyaktige variabelnavnene som koden forventer.
 
